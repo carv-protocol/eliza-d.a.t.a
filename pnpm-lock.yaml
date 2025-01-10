@@ -162,6 +162,9 @@ importers:
       '@elizaos/plugin-cronoszkevm':
         specifier: workspace:*
         version: link:../packages/plugin-cronoszkevm
+      '@elizaos/plugin-d.a.t.a':
+        specifier: workspace:*
+        version: link:../packages/plugin-d.a.t.a
       '@elizaos/plugin-evm':
         specifier: workspace:*
         version: link:../packages/plugin-evm
@@ -1119,6 +1122,12 @@ importers:
       whatwg-url:
         specifier: 7.1.0
         version: 7.1.0
+
+  packages/plugin-d.a.t.a:
+    dependencies:
+      '@elizaos/core':
+        specifier: workspace:*
+        version: link:../core
 
   packages/plugin-echochambers:
     dependencies:

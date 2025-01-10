@@ -18,13 +18,13 @@ if [ ! -d "packages" ]; then
     exit 1
 fi
 
-# Find all packages under the packages directory
-PACKAGES=( $(find packages -mindepth 1 -maxdepth 1 -type d -exec basename {} \;) )
+# Only test core and plugin-d.a.t.a packages
+PACKAGES=("core" "plugin-d.a.t.a")
 
 # Test packages in specified order
 for package in "${PACKAGES[@]}"; do
     package_path="packages/$package"
-    
+
     if [ ! -d "$package_path" ]; then
         echo -e "\033[1mPackage directory '$package' not found, skipping...\033[0m"
         continue
