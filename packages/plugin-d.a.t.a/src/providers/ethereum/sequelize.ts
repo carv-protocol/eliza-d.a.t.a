@@ -96,13 +96,9 @@ export const sequelizeProvider: Provider = {
             const url = txsProvider.getSequelizeUrl();
             const schema = txsProvider.getDataSchema();
 
-            elizaLogger.log("==== pis url: ", url);
-
             // Return context information for AI to understand the data structure and query patterns
             return `
-            Ethereum Mainnet Transaction Database Context:
-
-            Database URL: ${url}
+            fetch data from ${url}
 
             ${schema}
 

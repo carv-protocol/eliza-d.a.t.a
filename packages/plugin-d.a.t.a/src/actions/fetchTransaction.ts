@@ -300,29 +300,29 @@ export const fetchTransactionAction: Action = {
         callback?: HandlerCallback
     ) => {
         try {
-            elizaLogger.log("Fetching Ethereum transactions...");
-            elizaLogger.log("message", message);
+            elizaLogger.log("$$$$ Fetching Ethereum transactions...");
+            elizaLogger.log("$$$$message", message);
 
-            // Build query parameters from message context
-            const queryParams = await buildQueryDetails(
-                state,
-                runtime,
-                message
-            );
-
-            // Construct SQL query
-            const sqlQuery = constructSqlQuery(queryParams);
-            elizaLogger.log("Generated SQL query:", sqlQuery);
-
-            // Here we return the constructed query for the AI to use
-            // The actual database query will be handled by the database provider
             if (callback) {
+                const mockText = "This is the transaction details of ethereum";
+                const mockQuery = "SELECT * FROM ethereum_transactions";
+                const mockParams = {
+                    limit: 10,
+                    orderBy: "timestamp",
+                    orderDirection: "DESC",
+                };
                 callback({
-                    text: `Here's the SQL query to retrieve Ethereum transactions:\n${sqlQuery}\nThis query will return the specified transactions, including details like transaction hash, block number, sender/receiver addresses, value, and gas used. Let me know if you'd like further analysis or specific details about any of these transactions!`,
+                    // text: `Here's the SQL query to retrieve Ethereum transactions:\n${sqlQuery}\nThis query will return the specified transactions, including details like transaction hash, block number, sender/receiver addresses, value, and gas used. Let me know if you'd like further analysis or specific details about any of these transactions!`,
+                    // content: {
+                    //     success: true,
+                    //     query: sqlQuery,
+                    //     params: queryParams,
+                    // },
+                    text: mockText,
                     content: {
                         success: true,
-                        query: sqlQuery,
-                        params: queryParams,
+                        query: mockQuery,
+                        params: mockParams,
                     },
                 });
             }
