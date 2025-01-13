@@ -11,7 +11,7 @@ import {
 } from "@elizaos/core";
 
 // API response interface for query results
-interface QueryResult {
+interface IQueryResult {
     success: boolean;
     data: any[];
     metadata: {
@@ -34,199 +34,254 @@ interface QueryResult {
 }
 
 // Base data structure for query responses
-interface DataResponse {
+interface IDataResponse {
     data: any[];
     total?: number;
 }
 
-// Generate simulated blockchain data based on query type
-const generateQueryData = async (
-    sql: string,
-    queryType: string
-): Promise<DataResponse> => {
-    // Basic SQL parsing
-    const isAggregation = sql.toLowerCase().includes("group by");
-    const hasLimit = sql.toLowerCase().includes("limit");
-    const limit = hasLimit
-        ? parseInt(sql.match(/limit\s+(\d+)/i)?.[1] || "10")
-        : 10;
-
-    switch (queryType) {
-        case "token":
-            return {
-                data: [
-                    {
-                        token_address:
-                            "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
-                        from_address:
-                            "0x28c6c06298d514db089934071355e5743bf21d60",
-                        to_address:
-                            "0x21a31ee1afc51d94c2efccaa2092ad1028285549",
-                        value: "5.75",
-                        transaction_hash:
-                            "0x2386748234baef23784237842378423784237842",
-                        block_number: 18972344,
-                        block_timestamp: "2024-03-12T14:23:15Z",
-                        log_index: 1,
-                    },
-                ],
-                total: 100,
-            };
-
-        case "aggregate":
-            return {
-                data: isAggregation
-                    ? [
-                          {
-                              address:
-                                  "0x28c6c06298d514db089934071355e5743bf21d60",
-                              total_transactions: 1457,
-                              total_value: "1250.45",
-                              avg_gas_price: "25000000000",
-                          },
-                      ]
-                    : [],
-                total: 1,
-            };
-
-        case "transaction":
-        default:
-            return {
-                data: Array(limit)
-                    .fill(null)
-                    .map((_, i) => ({
-                        hash: `0x${(Math.random() * 1e50).toString(16).padStart(64, "0")}`,
-                        block_number: 18972344 - i,
-                        from_address:
-                            "0x" +
-                            (Math.random() * 1e40)
-                                .toString(16)
-                                .padStart(40, "0"),
-                        to_address:
-                            "0x" +
-                            (Math.random() * 1e40)
-                                .toString(16)
-                                .padStart(40, "0"),
-                        value: (Math.random() * 10).toFixed(4),
-                        gas_used: (
-                            21000 + Math.floor(Math.random() * 100000)
-                        ).toString(),
-                        gas_price: (
-                            20000000000 +
-                            Math.floor(Math.random() * 10000000000)
-                        ).toString(),
-                        block_timestamp: new Date(
-                            Date.now() - i * 15000
-                        ).toISOString(),
-                        nonce: Math.floor(Math.random() * 1000),
-                        input: "0x",
-                    })),
-                total: 1000000,
-            };
-    }
-};
-
-// Extract SQL query from text with validation
-const extractSQLQuery = (text: string): string | null => {
-    const sqlPattern = /(?:SELECT|WITH)\s+[\s\S]+?(?:;|$)/i;
-    const commentPattern = /--.*$|\/\*[\s\S]*?\*\//gm;
-
-    try {
-        const cleanText = text.replace(commentPattern, "");
-        const match = cleanText.match(sqlPattern);
-
-        if (!match) return null;
-
-        const query = match[0].trim();
-
-        // Enhanced SQL validation
-        const unsupportedKeywords = [
-            "drop",
-            "delete",
-            "update",
-            "insert",
-            "alter",
-            "create",
-        ];
-        if (
-            unsupportedKeywords.some((keyword) =>
-                query.toLowerCase().includes(keyword)
-            )
-        ) {
-            throw new Error(`Unsupported SQL operation: ${query}`);
-        }
-
-        // Validate basic SQL syntax
-        if (
-            !query.toLowerCase().includes("select") &&
-            !query.toLowerCase().includes("with")
-        ) {
-            throw new Error(
-                "Invalid SQL query: Must start with SELECT or WITH"
-            );
-        }
-
-        return query;
-    } catch (error) {
-        elizaLogger.error("SQL extraction error:", error);
-        throw error;
-    }
-};
-
-const executeQuery = async (sql: string): Promise<QueryResult> => {
-    try {
-        // Validate query
-        if (!sql || sql.length > 5000) {
-            throw new Error("Invalid SQL query length");
-        }
-
-        const queryType = sql.toLowerCase().includes("token_transfers")
-            ? "token"
-            : sql.toLowerCase().includes("count")
-              ? "aggregate"
-              : "transaction";
-
-        const result = await generateQueryData(sql, queryType);
-
-        const queryResult = {
-            success: true,
-            data: result.data,
-            metadata: {
-                total: result.total || 0,
-                queryTime: new Date().toISOString(),
-                queryType: queryType as "token" | "aggregate" | "transaction",
-                executionTime: 0,
-                cached: false,
-            },
-        };
-
-        return queryResult;
-    } catch (error) {
-        elizaLogger.error("Query execution failed:", error);
-        return {
-            success: false,
-            data: [],
-            metadata: {
-                total: 0,
-                queryTime: new Date().toISOString(),
-                queryType: "unknown",
-                executionTime: 0,
-                cached: false,
-            },
-            error: {
-                code: error.code || "EXECUTION_ERROR",
-                message: error.message || "Unknown error occurred",
-                details: error,
-            },
-        };
-    }
-};
-
 export class DatabaseProvider {
-    chain: string;
+    private chain: string;
 
     constructor(chain: string) {
         this.chain = chain;
+    }
+
+    // Move generateQueryData into class as private method
+    private async generateQueryData(
+        sql: string,
+        queryType: string
+    ): Promise<IDataResponse> {
+        // Basic SQL parsing
+        const isAggregation = sql.toLowerCase().includes("group by");
+        const hasLimit = sql.toLowerCase().includes("limit");
+        const limit = hasLimit
+            ? parseInt(sql.match(/limit\s+(\d+)/i)?.[1] || "10")
+            : 10;
+
+        switch (queryType) {
+            case "token":
+                return {
+                    data: [
+                        {
+                            token_address:
+                                "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+                            from_address:
+                                "0x28c6c06298d514db089934071355e5743bf21d60",
+                            to_address:
+                                "0x21a31ee1afc51d94c2efccaa2092ad1028285549",
+                            value: "5.75",
+                            transaction_hash:
+                                "0x2386748234baef23784237842378423784237842",
+                            block_number: 18972344,
+                            block_timestamp: "2024-03-12T14:23:15Z",
+                            log_index: 1,
+                        },
+                    ],
+                    total: 100,
+                };
+
+            case "aggregate":
+                return {
+                    data: isAggregation
+                        ? [
+                              {
+                                  address:
+                                      "0x28c6c06298d514db089934071355e5743bf21d60",
+                                  total_transactions: 1457,
+                                  total_value: "1250.45",
+                                  avg_gas_price: "25000000000",
+                              },
+                          ]
+                        : [],
+                    total: 1,
+                };
+
+            case "transaction":
+            default:
+                return {
+                    data: Array(limit)
+                        .fill(null)
+                        .map((_, i) => ({
+                            hash: `0x${(Math.random() * 1e50).toString(16).padStart(64, "0")}`,
+                            block_number: 18972344 - i,
+                            from_address:
+                                "0x" +
+                                (Math.random() * 1e40)
+                                    .toString(16)
+                                    .padStart(40, "0"),
+                            to_address:
+                                "0x" +
+                                (Math.random() * 1e40)
+                                    .toString(16)
+                                    .padStart(40, "0"),
+                            value: (Math.random() * 10).toFixed(4),
+                            gas_used: (
+                                21000 + Math.floor(Math.random() * 100000)
+                            ).toString(),
+                            gas_price: (
+                                20000000000 +
+                                Math.floor(Math.random() * 10000000000)
+                            ).toString(),
+                            block_timestamp: new Date(
+                                Date.now() - i * 15000
+                            ).toISOString(),
+                            nonce: Math.floor(Math.random() * 1000),
+                            input: "0x",
+                        })),
+                    total: 1000000,
+                };
+        }
+    }
+
+    // Move extractSQLQuery into class as private method
+    public extractSQLQuery(preResponse: any): string | null {
+        try {
+            // Try to parse if input is string
+            let jsonData = preResponse;
+            if (typeof preResponse === "string") {
+                try {
+                    jsonData = JSON.parse(preResponse);
+                } catch (e) {
+                    elizaLogger.error(
+                        "Failed to parse preResponse as JSON:",
+                        e
+                    );
+                    return null;
+                }
+            }
+
+            // Function to recursively search for SQL query in object
+            const findSQLQuery = (obj: any): string | null => {
+                // Base cases
+                if (!obj) return null;
+
+                // If string, check if it's a SQL query
+                if (typeof obj === "string") {
+                    const sqlPattern = /^\s*(SELECT|WITH)\s+[\s\S]+?(?:;|$)/i;
+                    const commentPattern = /--.*$|\/\*[\s\S]*?\*\//gm;
+
+                    // Clean and check the string
+                    const cleanStr = obj.replace(commentPattern, "").trim();
+                    if (sqlPattern.test(cleanStr)) {
+                        // Validate SQL safety
+                        const unsafeKeywords = [
+                            "drop",
+                            "delete",
+                            "update",
+                            "insert",
+                            "alter",
+                            "create",
+                        ];
+                        const isUnsafe = unsafeKeywords.some((keyword) =>
+                            cleanStr.toLowerCase().includes(keyword)
+                        );
+
+                        if (!isUnsafe) {
+                            return cleanStr;
+                        }
+                    }
+                    return null;
+                }
+
+                // If array, search each element
+                if (Array.isArray(obj)) {
+                    for (const item of obj) {
+                        const result = findSQLQuery(item);
+                        if (result) return result;
+                    }
+                    return null;
+                }
+
+                // If object, search each value
+                if (typeof obj === "object") {
+                    for (const key of Object.keys(obj)) {
+                        // Prioritize 'query' field in sql object
+                        if (key.toLowerCase() === "query" && obj.sql) {
+                            const result = findSQLQuery(obj[key]);
+                            if (result) return result;
+                        }
+                    }
+
+                    // Search other fields
+                    for (const key of Object.keys(obj)) {
+                        const result = findSQLQuery(obj[key]);
+                        if (result) return result;
+                    }
+                }
+
+                return null;
+            };
+
+            // Start the search
+            const sqlQuery = findSQLQuery(jsonData);
+
+            if (!sqlQuery) {
+                elizaLogger.warn("No valid SQL query found in preResponse");
+                return null;
+            }
+            return sqlQuery;
+        } catch (error) {
+            elizaLogger.error("Error in extractSQLQuery:", error);
+            return null;
+        }
+    }
+
+    // Move executeQuery into class as private method
+    private async executeQuery(sql: string): Promise<IQueryResult> {
+        try {
+            // Validate query
+            if (!sql || sql.length > 5000) {
+                throw new Error("Invalid SQL query length");
+            }
+
+            const queryType = sql.toLowerCase().includes("token_transfers")
+                ? "token"
+                : sql.toLowerCase().includes("count")
+                  ? "aggregate"
+                  : "transaction";
+
+            const result = await this.generateQueryData(sql, queryType);
+
+            const queryResult: IQueryResult = {
+                success: true,
+                data: result.data,
+                metadata: {
+                    total: result.total || 0,
+                    queryTime: new Date().toISOString(),
+                    queryType: queryType as
+                        | "token"
+                        | "aggregate"
+                        | "transaction",
+                    executionTime: 0,
+                    cached: false,
+                },
+            };
+
+            return queryResult;
+        } catch (error) {
+            elizaLogger.error("Query execution failed:", error);
+            return {
+                success: false,
+                data: [],
+                metadata: {
+                    total: 0,
+                    queryTime: new Date().toISOString(),
+                    queryType: "unknown",
+                    executionTime: 0,
+                    cached: false,
+                },
+                error: {
+                    code: error.code || "EXECUTION_ERROR",
+                    message: error.message || "Unknown error occurred",
+                    details: error,
+                },
+            };
+        }
+    }
+
+    // Add public method to execute queries
+    public async query(sql: string): Promise<IQueryResult> {
+        return this.executeQuery(sql);
     }
 
     getDatabaseSchema(): string {
@@ -369,26 +424,144 @@ export class DatabaseProvider {
         # User's Query
         {{userQuery}}
 
-        # Instructions:
-        1. Determine if a Query is Needed:
-           - Analyze the user's query to decide if it requires retrieving data
-           - If no query is needed, return a response with explanation
+        # Query Guidelines:
+        1. Time Range Requirements:
+           - ALWAYS include time range limitations in queries
+           - Default to last 3 months if no specific time range is mentioned
+           - Use date_parse(date, '%Y-%m-%d') >= date_add('month', -3, current_date) for default time range
+           - Adjust time range based on user's specific requirements
 
-        2. Determine the Query Objective:
-           - Identify the goal (e.g., "Count transactions", "Fetch gas usage")
-           - Extract specific filters or conditions from the user's query
+        2. Query Optimization:
+           - Include appropriate LIMIT clauses
+           - Use proper indexing columns (date, address, block_number)
+           - Consider partitioning by date
+           - Add WHERE clauses for efficient filtering
 
-        3. Generate SQL Query:
-           - Use the schema and examples to structure appropriate SQL query
-           - Ensure proper table references and field names
-           - Include necessary filters and conditions
-           - Consider performance implications
+        3. Response Format Requirements:
+           You MUST respond in the following JSON format:
+           {
+             "sql": {
+               "query": "your SQL query string",
+               "explanation": "brief explanation of the query",
+               "timeRange": "specified time range in the query"
+             },
+             "analysis": {
+               "overview": {
+                 "totalTransactions": "number",
+                 "timeSpan": "time period covered",
+                 "keyMetrics": ["list of important metrics"]
+               },
+               "patterns": {
+                 "transactionPatterns": ["identified patterns"],
+                 "addressBehavior": ["address analysis"],
+                 "temporalTrends": ["time-based trends"]
+               },
+               "statistics": {
+                 "averages": {},
+                 "distributions": {},
+                 "anomalies": []
+               },
+               "insights": ["key insights from the data"],
+               "recommendations": ["suggested actions or areas for further investigation"]
+             }
+           }
 
-        4. Format Response:
-           - Return results in a clear, readable format
-           - Include relevant metadata
-           - Provide context for numerical values
-           - Handle potential errors gracefully
+        4. Analysis Requirements:
+           - Focus on recent data patterns
+           - Identify trends and anomalies
+           - Provide statistical analysis
+           - Include risk assessment
+           - Suggest further investigations
+
+        Example Response:
+        {
+          "sql": {
+            "query": "WITH recent_txs AS (SELECT * FROM eth.transactions WHERE date_parse(date, '%Y-%m-%d') >= date_add('month', -3, current_date))...",
+            "explanation": "Query fetches last 3 months of transactions with aggregated metrics",
+            "timeRange": "Last 3 months"
+          },
+          "analysis": {
+            "overview": {
+              "totalTransactions": 1000000,
+              "timeSpan": "2024-01-01 to 2024-03-12",
+              "keyMetrics": ["Average daily transactions: 11000", "Peak day: 2024-02-15"]
+            },
+            "patterns": {
+              "transactionPatterns": ["High volume during Asian trading hours", "Weekend dips in activity"],
+              "addressBehavior": ["5 addresses responsible for 30% of volume", "Increasing DEX activity"],
+              "temporalTrends": ["Growing transaction volume", "Decreasing gas costs"]
+            },
+            "statistics": {
+              "averages": {
+                "dailyTransactions": 11000,
+                "gasPrice": "25 gwei"
+              },
+              "distributions": {
+                "valueRanges": ["0-1 ETH: 60%", "1-10 ETH: 30%", ">10 ETH: 10%"]
+              },
+              "anomalies": ["Unusual spike in gas prices on 2024-02-01"]
+            },
+            "insights": [
+              "Growing DeFi activity indicated by smart contract interactions",
+              "Whale addresses showing increased accumulation"
+            ],
+            "recommendations": [
+              "Monitor growing gas usage trend",
+              "Track new active addresses for potential market signals"
+            ]
+          }
+        }
+        `;
+    }
+
+    getAnalysisInstruction(): string {
+        return `
+            1. Data Overview:
+                - Analyze the overall pattern in the query results
+                - Identify key metrics and their significance
+                - Note any unusual or interesting patterns
+
+            2. Transaction Analysis:
+                - Examine transaction values and their distribution
+                - Analyze gas usage patterns
+                - Evaluate transaction frequency and timing
+                - Identify significant transactions or patterns
+
+            3. Address Behavior:
+                - Analyze address interactions
+                - Identify frequent participants
+                - Evaluate transaction patterns for specific addresses
+                - Note any suspicious or interesting behavior
+
+            4. Temporal Patterns:
+                - Analyze time-based patterns
+                - Identify peak activity periods
+                - Note any temporal anomalies
+                - Consider seasonal or cyclical patterns
+
+            5. Token Analysis (if applicable):
+                - Examine token transfer patterns
+                - Analyze token holder behavior
+                - Evaluate token concentration
+                - Note significant token movements
+
+            6. Statistical Insights:
+                - Provide relevant statistical measures
+                - Compare with typical blockchain metrics
+                - Highlight significant deviations
+                - Consider historical context
+
+            7. Risk Assessment:
+                - Identify potential suspicious activities
+                - Note any unusual patterns
+                - Flag potential security concerns
+                - Consider regulatory implications
+
+            Please provide a comprehensive analysis of the Ethereum blockchain data based on these ethereum information.
+            Focus on significant patterns, anomalies, and insights that would be valuable for understanding the blockchain activity.
+            Use technical blockchain terminology and provide specific examples from the data to support your analysis.
+
+            Note: This analysis is based on simulated data for demonstration purposes.
         `;
     }
 }
@@ -419,16 +592,22 @@ export const ethereumDataProvider: Provider = {
 
             elizaLogger.log("%%%%&& Pis Context:", message.content.text);
 
-            const context = template
+            const buildContext = template
                 .replace("{{databaseSchema}}", schema)
                 .replace("{{queryExamples}}", examples)
                 .replace("{{userQuery}}", message.content.text || "");
+
+            const context = JSON.stringify({
+                user: runtime.agentId,
+                content: buildContext,
+                action: "fetch_transactions",
+            });
 
             elizaLogger.log("%%%% Pis Generated database context");
 
             const preResponse = await generateMessageResponse({
                 runtime: runtime,
-                context,
+                context: context,
                 modelClass: ModelClass.LARGE,
             });
 
@@ -452,14 +631,18 @@ export const ethereumDataProvider: Provider = {
             await runtime.messageManager.createMemory(preResponseMessage);
             await runtime.updateRecentMessageState(state);
 
-            // Check for SQL query in the response
-            const sqlQuery = extractSQLQuery(preResponse.text);
+            elizaLogger.log("**** Pis preResponse", preResponse);
+
+            // Check for SQL query in the response using class method
+            const sqlQuery = provider.extractSQLQuery(preResponse);
             if (sqlQuery) {
                 elizaLogger.log("%%%% Found SQL query:", sqlQuery);
+                const analysisInstruction = provider.getAnalysisInstruction();
                 try {
-                    // Call mock API with the SQL query
-                    const queryResult = await executeQuery(sqlQuery);
+                    // Call query method on provider
+                    const queryResult = await provider.query(sqlQuery);
 
+                    elizaLogger.log("%%%% Pis queryResult", queryResult);
                     // Return combined context with query results and analysis instructions
                     return `
                     ${context}
@@ -467,61 +650,16 @@ export const ethereumDataProvider: Provider = {
                     # ethereum information
                     ${JSON.stringify(queryResult, null, 2)}
 
-                    Analysis Instructions:
-                    1. Data Overview:
-                       - Analyze the overall pattern in the query results
-                       - Identify key metrics and their significance
-                       - Note any unusual or interesting patterns
-
-                    2. Transaction Analysis:
-                       - Examine transaction values and their distribution
-                       - Analyze gas usage patterns
-                       - Evaluate transaction frequency and timing
-                       - Identify significant transactions or patterns
-
-                    3. Address Behavior:
-                       - Analyze address interactions
-                       - Identify frequent participants
-                       - Evaluate transaction patterns for specific addresses
-                       - Note any suspicious or interesting behavior
-
-                    4. Temporal Patterns:
-                       - Analyze time-based patterns
-                       - Identify peak activity periods
-                       - Note any temporal anomalies
-                       - Consider seasonal or cyclical patterns
-
-                    5. Token Analysis (if applicable):
-                       - Examine token transfer patterns
-                       - Analyze token holder behavior
-                       - Evaluate token concentration
-                       - Note significant token movements
-
-                    6. Statistical Insights:
-                       - Provide relevant statistical measures
-                       - Compare with typical blockchain metrics
-                       - Highlight significant deviations
-                       - Consider historical context
-
-                    7. Risk Assessment:
-                       - Identify potential suspicious activities
-                       - Note any unusual patterns
-                       - Flag potential security concerns
-                       - Consider regulatory implications
-
-                    Please provide a comprehensive analysis of the Ethereum blockchain data based on these ethereum information.
-                    Focus on significant patterns, anomalies, and insights that would be valuable for understanding the blockchain activity.
-                    Use technical blockchain terminology and provide specific examples from the data to support your analysis.
-
-                    Note: This analysis is based on simulated data for demonstration purposes.
+                    # Analysis Instructions
+                    ${analysisInstruction}
                     `;
                 } catch (error) {
                     elizaLogger.error("Error executing query:", error);
                     return context;
                 }
+            } else {
+                elizaLogger.log("%%%% Pis no SQL query found");
             }
-
-            elizaLogger.log("%%%% Pis new Response:", preResponse);
             return context;
         } catch (error) {
             elizaLogger.error("Error in ethereum data provider:", error);
