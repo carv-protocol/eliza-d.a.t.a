@@ -32,108 +32,113 @@ interface IQueryResult {
         details?: any;
     };
 }
-
-// Base data structure for query responses
-interface IDataResponse {
-    data: any[];
-    total?: number;
+// API response interface
+interface IApiResponse {
+    code: number;
+    msg: string;
+    data: {
+        column_infos: string[];
+        rows: {
+            items: (string | number)[];
+        }[];
+    };
 }
 
 export class DatabaseProvider {
     private chain: string;
+    private readonly API_URL =
+        "https://dev-interface.carv.io/ai-agent-backend/sql_query";
+
+    // fake data
+    private readonly MOCK_RESPONSE: IApiResponse = {
+        code: 0,
+        msg: "Success",
+        data: {
+            column_infos: [
+                "hash",
+                "nonce",
+                "transaction_index",
+                "from_address",
+                "to_address",
+                "value",
+                "gas",
+                "gas_price",
+                "input",
+                "receipt_cumulative_gas_used",
+                "receipt_gas_used",
+                "receipt_contract_address",
+                "receipt_root",
+                "receipt_status",
+                "block_timestamp",
+                "block_number",
+                "block_hash",
+                "max_fee_per_gas",
+                "max_priority_fee_per_gas",
+                "transaction_type",
+                "receipt_effective_gas_price",
+                "date",
+            ],
+            rows: [
+                {
+                    items: [
+                        "0xb9f2c4dd816305a29471f7e843f33b8a4f52c24bfac58dba5f6dd703bdcc347d",
+                        "131",
+                        "0",
+                        "0xb7b3690efa6b3f08d4ec289ff655c4b7bb15ee39",
+                        "0x32be343b94f860124dc4fee278fdcbd38c102d88",
+                        "5.06132703E18",
+                        "21000",
+                        "58587049895",
+                        "0x",
+                        "21000",
+                        "21000",
+                        "",
+                        "",
+                        "1",
+                        "2015-10-18 09:01:42.000",
+                        "401609",
+                        "0xab8cf7f52769cb62a8a970347a116368c2ae08581d412573dd09a8a4af99b4cd",
+                        "0",
+                        "0",
+                        "0",
+                        "58587049895",
+                        "2015-10-18",
+                    ],
+                },
+                {
+                    items: [
+                        "0xbca5c575aa36f6164dbd98bf7c1008791d615cb0f255c19db7c6b45b06367ba0",
+                        "9573",
+                        "0",
+                        "0x2a65aca4d5fc5b5c859090a6c34d164135398226",
+                        "0xff3a70d8d5692dd05d71175fa29e8565f7450f57",
+                        "2.7443251E18",
+                        "90000",
+                        "50000000000",
+                        "0x",
+                        "21000",
+                        "21000",
+                        "",
+                        "",
+                        "1",
+                        "2015-10-18 12:21:43.000",
+                        "402253",
+                        "0x290dfc39bec9918fca28c8cebe2beaa19f9303f3b432d62d1e3409b1195556d6",
+                        "0",
+                        "0",
+                        "0",
+                        "50000000000",
+                        "2015-10-18",
+                    ],
+                },
+            ],
+        },
+    };
 
     constructor(chain: string) {
         this.chain = chain;
     }
 
-    // Move generateQueryData into class as private method
-    private async generateQueryData(
-        sql: string,
-        queryType: string
-    ): Promise<IDataResponse> {
-        // Basic SQL parsing
-        const isAggregation = sql.toLowerCase().includes("group by");
-        const hasLimit = sql.toLowerCase().includes("limit");
-        const limit = hasLimit
-            ? parseInt(sql.match(/limit\s+(\d+)/i)?.[1] || "10")
-            : 10;
-
-        switch (queryType) {
-            case "token":
-                return {
-                    data: [
-                        {
-                            token_address:
-                                "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
-                            from_address:
-                                "0x28c6c06298d514db089934071355e5743bf21d60",
-                            to_address:
-                                "0x21a31ee1afc51d94c2efccaa2092ad1028285549",
-                            value: "5.75",
-                            transaction_hash:
-                                "0x2386748234baef23784237842378423784237842",
-                            block_number: 18972344,
-                            block_timestamp: "2024-03-12T14:23:15Z",
-                            log_index: 1,
-                        },
-                    ],
-                    total: 100,
-                };
-
-            case "aggregate":
-                return {
-                    data: isAggregation
-                        ? [
-                              {
-                                  address:
-                                      "0x28c6c06298d514db089934071355e5743bf21d60",
-                                  total_transactions: 1457,
-                                  total_value: "1250.45",
-                                  avg_gas_price: "25000000000",
-                              },
-                          ]
-                        : [],
-                    total: 1,
-                };
-
-            case "transaction":
-            default:
-                return {
-                    data: Array(limit)
-                        .fill(null)
-                        .map((_, i) => ({
-                            hash: `0x${(Math.random() * 1e50).toString(16).padStart(64, "0")}`,
-                            block_number: 18972344 - i,
-                            from_address:
-                                "0x" +
-                                (Math.random() * 1e40)
-                                    .toString(16)
-                                    .padStart(40, "0"),
-                            to_address:
-                                "0x" +
-                                (Math.random() * 1e40)
-                                    .toString(16)
-                                    .padStart(40, "0"),
-                            value: (Math.random() * 10).toFixed(4),
-                            gas_used: (
-                                21000 + Math.floor(Math.random() * 100000)
-                            ).toString(),
-                            gas_price: (
-                                20000000000 +
-                                Math.floor(Math.random() * 10000000000)
-                            ).toString(),
-                            block_timestamp: new Date(
-                                Date.now() - i * 15000
-                            ).toISOString(),
-                            nonce: Math.floor(Math.random() * 1000),
-                            input: "0x",
-                        })),
-                    total: 1000000,
-                };
-        }
-    }
-
-    // Move extractSQLQuery into class as private method
     public extractSQLQuery(preResponse: any): string | null {
         try {
             // Try to parse if input is string
@@ -226,7 +231,53 @@ export class DatabaseProvider {
         }
     }
 
-    // Move executeQuery into class as private method
+    private async sendSqlQuery(
+        sql: string,
+        mock = true
+    ): Promise<IApiResponse> {
+        if (mock) {
+            elizaLogger.log("Using mock data for SQL query");
+            return this.MOCK_RESPONSE;
+        }
+
+        try {
+            const response = await fetch(this.API_URL, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    sql_content: sql,
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            return data as IApiResponse;
+        } catch (error) {
+            elizaLogger.error("Error sending SQL query to API:", error);
+            throw error;
+        }
+    }
+
+    // Transform API response data
+    private transformApiResponse(apiResponse: IApiResponse): any[] {
+        const { column_infos, rows } = apiResponse.data;
+
+        return rows.map((row) => {
+            const rowData: Record<string, any> = {};
+            row.items.forEach((value, index) => {
+                const columnName = column_infos[index];
+                rowData[columnName] = value;
+            });
+            return rowData;
+        });
+    }
+
+    // Execute query
     private async executeQuery(sql: string): Promise<IQueryResult> {
         try {
             // Validate query
@@ -240,13 +291,22 @@ export class DatabaseProvider {
                   ? "aggregate"
                   : "transaction";
 
-            const result = await this.generateQueryData(sql, queryType);
+            // Send query to API
+            const apiResponse = await this.sendSqlQuery(sql);
+
+            // Check API response status
+            if (apiResponse.code !== 0) {
+                throw new Error(`API Error: ${apiResponse.msg}`);
+            }
+
+            // Transform data
+            const transformedData = this.transformApiResponse(apiResponse);
 
             const queryResult: IQueryResult = {
                 success: true,
-                data: result.data,
+                data: transformedData,
                 metadata: {
-                    total: result.total || 0,
+                    total: transformedData.length,
                     queryTime: new Date().toISOString(),
                     queryType: queryType as
                         | "token"
@@ -279,7 +339,6 @@ export class DatabaseProvider {
         }
     }
 
-    // Add public method to execute queries
     public async query(sql: string): Promise<IQueryResult> {
         return this.executeQuery(sql);
     }
@@ -645,9 +704,10 @@ export const ethereumDataProvider: Provider = {
                     elizaLogger.log("%%%% Pis queryResult", queryResult);
                     // Return combined context with query results and analysis instructions
                     return `
-                    ${context}
+                    # query by user
+                    ${preResponse.text}
 
-                    # ethereum information
+                    # query result
                     ${JSON.stringify(queryResult, null, 2)}
 
                     # Analysis Instructions
