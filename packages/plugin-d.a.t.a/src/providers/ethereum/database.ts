@@ -233,7 +233,7 @@ export class DatabaseProvider {
 
     private async sendSqlQuery(
         sql: string,
-        mock = true
+        mock = false
     ): Promise<IApiResponse> {
         if (mock) {
             elizaLogger.log("Using mock data for SQL query");
@@ -705,7 +705,7 @@ export const ethereumDataProvider: Provider = {
                     // Return combined context with query results and analysis instructions
                     return `
                     # query by user
-                    ${preResponse.text}
+                    ${message.content.text}
 
                     # query result
                     ${JSON.stringify(queryResult, null, 2)}
