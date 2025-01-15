@@ -46,11 +46,13 @@ interface IApiResponse {
 
 export class DatabaseProvider {
     private chain: string;
-    private readonly API_URL =
-        "https://dev-interface.carv.io/ai-agent-backend/sql_query";
+    private readonly API_URL: string;
+    private readonly AUTH_TOKEN: string;
 
-    constructor(chain: string) {
+    constructor(chain: string, runtime: IAgentRuntime) {
         this.chain = chain;
+        this.API_URL = runtime.getSetting("DATA_API_KEY");
+        this.AUTH_TOKEN = runtime.getSetting("DATA_AUTH_TOKEN");
     }
 
     public extractSQLQuery(preResponse: any): string | null {
@@ -151,6 +153,7 @@ export class DatabaseProvider {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
+                    Authorization: this.AUTH_TOKEN,
                 },
                 body: JSON.stringify({
                     sql_content: sql,
@@ -533,7 +536,7 @@ export class DatabaseProvider {
 
 export const databaseProvider = (runtime: IAgentRuntime) => {
     const chain = "ethereum-mainnet";
-    return new DatabaseProvider(chain);
+    return new DatabaseProvider(chain, runtime);
 };
 
 export const ethereumDataProvider: Provider = {
@@ -594,13 +597,13 @@ export const ethereumDataProvider: Provider = {
             // Check for SQL query in the response using class method
             const sqlQuery = provider.extractSQLQuery(preResponse);
             if (sqlQuery) {
-                elizaLogger.log("%%%% Found SQL query:", sqlQuery);
+                elizaLogger.log("%%%% D.A.T.A. Generated SQL query:", sqlQuery);
                 const analysisInstruction = provider.getAnalysisInstruction();
                 try {
                     // Call query method on provider
                     const queryResult = await provider.query(sqlQuery);
 
-                    elizaLogger.log("%%%% queryResult", queryResult);
+                    elizaLogger.log("%%%% D.A.T.A. queryResult", queryResult);
                     // Return combined context with query results and analysis instructions
                     return `
                     # query by user
