@@ -49,92 +49,6 @@ export class DatabaseProvider {
     private readonly API_URL =
         "https://dev-interface.carv.io/ai-agent-backend/sql_query";
 
-    // fake data
-    private readonly MOCK_RESPONSE: IApiResponse = {
-        code: 0,
-        msg: "Success",
-        data: {
-            column_infos: [
-                "hash",
-                "nonce",
-                "transaction_index",
-                "from_address",
-                "to_address",
-                "value",
-                "gas",
-                "gas_price",
-                "input",
-                "receipt_cumulative_gas_used",
-                "receipt_gas_used",
-                "receipt_contract_address",
-                "receipt_root",
-                "receipt_status",
-                "block_timestamp",
-                "block_number",
-                "block_hash",
-                "max_fee_per_gas",
-                "max_priority_fee_per_gas",
-                "transaction_type",
-                "receipt_effective_gas_price",
-                "date",
-            ],
-            rows: [
-                {
-                    items: [
-                        "0xb9f2c4dd816305a29471f7e843f33b8a4f52c24bfac58dba5f6dd703bdcc347d",
-                        "131",
-                        "0",
-                        "0xb7b3690efa6b3f08d4ec289ff655c4b7bb15ee39",
-                        "0x32be343b94f860124dc4fee278fdcbd38c102d88",
-                        "5.06132703E18",
-                        "21000",
-                        "58587049895",
-                        "0x",
-                        "21000",
-                        "21000",
-                        "",
-                        "",
-                        "1",
-                        "2015-10-18 09:01:42.000",
-                        "401609",
-                        "0xab8cf7f52769cb62a8a970347a116368c2ae08581d412573dd09a8a4af99b4cd",
-                        "0",
-                        "0",
-                        "0",
-                        "58587049895",
-                        "2015-10-18",
-                    ],
-                },
-                {
-                    items: [
-                        "0xbca5c575aa36f6164dbd98bf7c1008791d615cb0f255c19db7c6b45b06367ba0",
-                        "9573",
-                        "0",
-                        "0x2a65aca4d5fc5b5c859090a6c34d164135398226",
-                        "0xff3a70d8d5692dd05d71175fa29e8565f7450f57",
-                        "2.7443251E18",
-                        "90000",
-                        "50000000000",
-                        "0x",
-                        "21000",
-                        "21000",
-                        "",
-                        "",
-                        "1",
-                        "2015-10-18 12:21:43.000",
-                        "402253",
-                        "0x290dfc39bec9918fca28c8cebe2beaa19f9303f3b432d62d1e3409b1195556d6",
-                        "0",
-                        "0",
-                        "0",
-                        "50000000000",
-                        "2015-10-18",
-                    ],
-                },
-            ],
-        },
-    };
-
     constructor(chain: string) {
         this.chain = chain;
     }
@@ -231,15 +145,7 @@ export class DatabaseProvider {
         }
     }
 
-    private async sendSqlQuery(
-        sql: string,
-        mock = false
-    ): Promise<IApiResponse> {
-        if (mock) {
-            elizaLogger.log("Using mock data for SQL query");
-            return this.MOCK_RESPONSE;
-        }
-
+    private async sendSqlQuery(sql: string): Promise<IApiResponse> {
         try {
             const response = await fetch(this.API_URL, {
                 method: "POST",
@@ -636,7 +542,6 @@ export const ethereumDataProvider: Provider = {
         message: Memory,
         state: State
     ): Promise<string | null> => {
-        elizaLogger.log("%%%% Pis Retrieving from ethereum data provider...");
         try {
             const provider = databaseProvider(runtime);
             const schema = provider.getDatabaseSchema();
@@ -649,8 +554,6 @@ export const ethereumDataProvider: Provider = {
                 state = await runtime.updateRecentMessageState(state);
             }
 
-            elizaLogger.log("%%%%&& Pis Context:", message.content.text);
-
             const buildContext = template
                 .replace("{{databaseSchema}}", schema)
                 .replace("{{queryExamples}}", examples)
@@ -661,8 +564,6 @@ export const ethereumDataProvider: Provider = {
                 content: buildContext,
                 action: "fetch_transactions",
             });
-
-            elizaLogger.log("%%%% Pis Generated database context");
 
             const preResponse = await generateMessageResponse({
                 runtime: runtime,
@@ -690,8 +591,6 @@ export const ethereumDataProvider: Provider = {
             await runtime.messageManager.createMemory(preResponseMessage);
             await runtime.updateRecentMessageState(state);
 
-            elizaLogger.log("**** Pis preResponse", preResponse);
-
             // Check for SQL query in the response using class method
             const sqlQuery = provider.extractSQLQuery(preResponse);
             if (sqlQuery) {
@@ -701,7 +600,7 @@ export const ethereumDataProvider: Provider = {
                     // Call query method on provider
                     const queryResult = await provider.query(sqlQuery);
 
-                    elizaLogger.log("%%%% Pis queryResult", queryResult);
+                    elizaLogger.log("%%%% queryResult", queryResult);
                     // Return combined context with query results and analysis instructions
                     return `
                     # query by user
@@ -718,7 +617,7 @@ export const ethereumDataProvider: Provider = {
                     return context;
                 }
             } else {
-                elizaLogger.log("%%%% Pis no SQL query found");
+                elizaLogger.log("no sql query found in user message");
             }
             return context;
         } catch (error) {
