@@ -18,8 +18,8 @@ if [ ! -d "packages" ]; then
     exit 1
 fi
 
-# Only test core and plugin-d.a.t.a packages
-PACKAGES=("core" "plugin-d.a.t.a")
+# Find all packages under the packages directory
+PACKAGES=( $(find packages -mindepth 1 -maxdepth 1 -type d -exec basename {} \;) )
 
 # Test packages in specified order
 for package in "${PACKAGES[@]}"; do
