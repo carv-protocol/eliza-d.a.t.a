@@ -12,25 +12,26 @@ import {
 } from "../providers/ethereum/database";
 
 // Query parameter interface
-interface FetchTransactionParams {
+interface FetchTokenTransactionParams {
+    tokenAddress?: string;
     address?: string;
     startDate?: string;
     endDate?: string;
     minValue?: string;
     maxValue?: string;
     limit?: number;
-    orderBy?: "block_timestamp" | "value" | "gas_price";
+    orderBy?: "block_timestamp" | "value";
     orderDirection?: "ASC" | "DESC";
 }
 
 // Response interface matching database.ts
-interface TransactionQueryResult {
+interface TokenTransactionQueryResult {
     success: boolean;
     data: any[];
     metadata: {
         total: number;
         queryTime: string;
-        queryType: "transaction" | "token" | "aggregate" | "unknown";
+        queryType: "token" | "transaction" | "aggregate" | "unknown";
         executionTime: number;
         cached: boolean;
     };
@@ -41,17 +42,25 @@ interface TransactionQueryResult {
     };
 }
 
-export class FetchTransactionAction {
+export class FetchTokenTransactionAction {
     constructor(private dbProvider: DatabaseProvider) {}
 
-    private parseQueryParams(message: string): FetchTransactionParams {
-        const params: FetchTransactionParams = {
+    private parseQueryParams(message: string): FetchTokenTransactionParams {
+        const params: FetchTokenTransactionParams = {
             limit: 10,
             orderBy: "block_timestamp",
             orderDirection: "DESC",
         };
 
-        // Extract address if present
+        // Extract token address
+        const tokenMatch = message.match(
+            /(?:token|contract)[:\s]+([0x][a-fA-F0-9]{40})/i
+        );
+        if (tokenMatch) {
+            params.tokenAddress = tokenMatch[1];
+        }
+
+        // Extract wallet address
         const addressMatch = message.match(
             /(?:address|wallet|account|from|to)[:\s]+([0x][a-fA-F0-9]{40})/i
         );
@@ -68,17 +77,17 @@ export class FetchTransactionAction {
             params.endDate = timeMatch[2];
         }
 
-        // Extract value range
+        // Extract value range (token amounts)
         const valueMatch = message.match(
-            /(?:above|more than)\s*(\d+(?:\.\d+)?)\s*eth/i
+            /(?:above|more than)\s*(\d+(?:\.\d+)?)/i
         );
         if (valueMatch) {
-            params.minValue = (parseFloat(valueMatch[1]) * 1e18).toString();
+            params.minValue = valueMatch[1];
         }
 
         // Extract limit
         const limitMatch = message.match(
-            /(?:show|get|fetch|display)\s+(\d+)\s+transactions/i
+            /(?:show|get|fetch|display)\s+(\d+)\s+(?:transfers|transactions)/i
         );
         if (limitMatch) {
             params.limit = Math.min(parseInt(limitMatch[1]), 100); // Cap at 100
@@ -87,7 +96,7 @@ export class FetchTransactionAction {
         return params;
     }
 
-    private buildSqlQuery(params: FetchTransactionParams): string {
+    private buildSqlQuery(params: FetchTokenTransactionParams): string {
         const conditions: string[] = [];
 
         // Default time range if not specified
@@ -102,6 +111,12 @@ export class FetchTransactionAction {
             }
         }
 
+        // Token address is required
+        if (params.tokenAddress) {
+            conditions.push(`token_address = '${params.tokenAddress}'`);
+        }
+
+        // Filter by address if specified
         if (params.address) {
             conditions.push(
                 `(from_address = '${params.address}' OR to_address = '${params.address}')`
@@ -118,15 +133,15 @@ export class FetchTransactionAction {
 
         const query = `
             SELECT
-                hash,
-                block_number,
-                block_timestamp,
+                token_address,
                 from_address,
                 to_address,
                 value,
-                gas,
-                gas_price
-            FROM eth.transactions
+                transaction_hash,
+                block_number,
+                block_timestamp,
+                log_index
+            FROM eth.token_transfers
             WHERE ${conditions.join(" AND ")}
             ORDER BY ${params.orderBy} ${params.orderDirection}
             LIMIT ${params.limit}
@@ -135,28 +150,35 @@ export class FetchTransactionAction {
         return query.trim();
     }
 
-    public async fetchTransactions(
+    public async fetchTokenTransfers(
         message: string
-    ): Promise<TransactionQueryResult> {
+    ): Promise<TokenTransactionQueryResult> {
         try {
             // Parse parameters from message
             const params = this.parseQueryParams(message);
 
+            // Token address is required
+            if (!params.tokenAddress) {
+                throw new Error(
+                    "Token address is required for token transfers query"
+                );
+            }
+
             // Build SQL query
             const sqlQuery = this.buildSqlQuery(params);
-            elizaLogger.log("Generated SQL query:", sqlQuery);
+            elizaLogger.log("Generated token transfers SQL query:", sqlQuery);
 
             // Execute query using database provider
             return await this.dbProvider.query(sqlQuery);
         } catch (error) {
-            elizaLogger.error("Error fetching transactions:", error);
+            elizaLogger.error("Error fetching token transfers:", error);
             return {
                 success: false,
                 data: [],
                 metadata: {
                     total: 0,
                     queryTime: new Date().toISOString(),
-                    queryType: "transaction",
+                    queryType: "token",
                     executionTime: 0,
                     cached: false,
                 },
@@ -170,28 +192,28 @@ export class FetchTransactionAction {
     }
 }
 
-export const fetchTransactionAction: Action = {
-    name: "fetch_transactions",
-    description: "Fetch Ethereum transactions based on various criteria",
+export const fetchTokenTransactionAction: Action = {
+    name: "fetch_token_transfers",
+    description: "Fetch ERC20 token transfers based on various criteria",
     similes: [
-        "get transactions",
-        "show transfers",
-        "display eth transactions",
-        "find transactions",
-        "search transfers",
-        "check transactions",
-        "view transfers",
-        "list transactions",
-        "recent transactions",
-        "transaction history",
+        "get token transfers",
+        "show token transactions",
+        "display token movements",
+        "find token transfers",
+        "search token transactions",
+        "check token transfers",
+        "view token movements",
+        "list token transactions",
+        "recent token transfers",
+        "token transfer history",
     ],
     examples: [
         [
             {
                 user: "user",
                 content: {
-                    text: "Show me the latest 10 Ethereum transactions",
-                    action: "FETCH_TRANSACTIONS",
+                    text: "Show me the latest 10 transfers for token 0x1f9840a85d5af5bf1d1762f925bdaddc4201f984",
+                    action: "FETCH_TOKEN_TRANSFERS",
                 },
             },
         ],
@@ -199,8 +221,8 @@ export const fetchTransactionAction: Action = {
             {
                 user: "user",
                 content: {
-                    text: "Get transactions for address 0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
-                    action: "FETCH_TRANSACTIONS",
+                    text: "Get token transfers for address 0x742d35Cc6634C0532925a3b844Bc454e4438f44e token 0x1f9840a85d5af5bf1d1762f925bdaddc4201f984",
+                    action: "FETCH_TOKEN_TRANSFERS",
                 },
             },
         ],
@@ -219,14 +241,16 @@ export const fetchTransactionAction: Action = {
     ) => {
         try {
             const provider = databaseProvider(runtime);
-            const action = new FetchTransactionAction(provider);
+            const action = new FetchTokenTransactionAction(provider);
 
-            const result = await action.fetchTransactions(message.content.text);
+            const result = await action.fetchTokenTransfers(
+                message.content.text
+            );
 
             if (callback) {
                 if (result.success) {
                     callback({
-                        text: `Found ${result.metadata.total} transactions. Here are the details:`,
+                        text: `Found ${result.metadata.total} token transfers. Here are the details:`,
                         content: {
                             success: true,
                             data: result.data,
@@ -235,7 +259,7 @@ export const fetchTransactionAction: Action = {
                     });
                 } else {
                     callback({
-                        text: `Error fetching transactions: ${result.error?.message}`,
+                        text: `Error fetching token transfers: ${result.error?.message}`,
                         content: { error: result.error },
                     });
                 }
@@ -243,10 +267,10 @@ export const fetchTransactionAction: Action = {
 
             return result.success;
         } catch (error) {
-            elizaLogger.error("Error in fetch transaction action:", error);
+            elizaLogger.error("Error in fetch token transfer action:", error);
             if (callback) {
                 callback({
-                    text: `Error fetching transactions: ${error.message}`,
+                    text: `Error fetching token transfers: ${error.message}`,
                     content: { error: error.message },
                 });
             }
@@ -255,4 +279,4 @@ export const fetchTransactionAction: Action = {
     },
 };
 
-export default fetchTransactionAction;
+export default fetchTokenTransactionAction;
