@@ -42,6 +42,63 @@ interface TransactionQueryResult {
             query: string;
             paramValidation?: string[];
         };
+        blockStats?: {
+            blockRange: {
+                startBlock: string;
+                endBlock: string;
+                blockCount: number;
+            };
+            timeRange: {
+                startTime: string;
+                endTime: string;
+                timeSpanSeconds: number;
+            };
+            uniqueBlocks: number;
+            averageTransactionsPerBlock: number;
+        };
+        transactionStats?: {
+            uniqueFromAddresses: number;
+            uniqueToAddresses: number;
+            txTypeDistribution: Record<string, number>;
+            gasStats: {
+                totalGasUsed: number;
+                averageGasUsed: number;
+                minGasUsed: number;
+                maxGasUsed: number;
+                averageGasPrice: number;
+                totalGasCost: string; // in ETH
+            };
+            valueStats: {
+                totalValue: string; // in ETH
+                averageValue: string; // in ETH
+                minValue: string; // in ETH
+                maxValue: string; // in ETH
+                zeroValueCount: number;
+            };
+            contractStats: {
+                contractTransactions: number;
+                normalTransactions: number;
+                contractInteractions: {
+                    uniqueContracts: number;
+                    topContracts: Array<{
+                        address: string;
+                        count: number;
+                    }>;
+                };
+            };
+            addressStats: {
+                topSenders: Array<{
+                    address: string;
+                    count: number;
+                    totalValue: string; // in ETH
+                }>;
+                topReceivers: Array<{
+                    address: string;
+                    count: number;
+                    totalValue: string; // in ETH
+                }>;
+            };
+        };
     };
     error?: {
         code: string;
@@ -180,43 +237,96 @@ export class FetchTransactionAction {
     }
 
     public async fetchTransactions(
-        message: string,
+        message: Memory,
         runtime: IAgentRuntime,
         state: State
     ): Promise<TransactionQueryResult> {
         try {
-            // Parse parameters using LLM
-            const context = composeContext({
-                state,
-                template: fetchTransactionTemplate,
-            });
-
-            const paramsJson = (await generateObject({
+            const ret = await this.dbProvider.processD_A_T_AQuery(
                 runtime,
-                context,
-                modelClass: ModelClass.SMALL,
-            })) as FetchTransactionParams;
+                message,
+                state
+            );
 
-            // Validate parameters
-            const validationMessages = this.validateParams(paramsJson);
-            if (validationMessages.length > 0) {
-                throw new Error(validationMessages.join("; "));
+            if (!ret || !ret.queryResult) {
+                throw new Error("Failed to fetch transactions");
             }
 
-            // Build and execute query
-            const sqlQuery = this.buildSqlQuery(paramsJson);
-            elizaLogger.log("Generated SQL query:", sqlQuery);
-
-            const result = (await this.dbProvider.query(
-                sqlQuery
-            )) as TransactionQueryResult;
+            const result = ret.queryResult as TransactionQueryResult;
 
             // Enhance result with query details
-            if (result.success) {
-                result.metadata.queryDetails = {
-                    params: paramsJson,
-                    query: sqlQuery,
-                    paramValidation: validationMessages,
+            if (result.success && result.data.length > 0) {
+                const transactions = result.data;
+
+                // 区块统计
+                const blocks = transactions.map((tx) => ({
+                    number: tx.block_number,
+                    timestamp: new Date(tx.block_timestamp).getTime(),
+                    hash: tx.block_hash,
+                }));
+
+                const uniqueBlocks = new Set(blocks.map((b) => b.number));
+                const blockNumbers = Array.from(uniqueBlocks)
+                    .map(Number)
+                    .sort((a, b) => a - b);
+                const blockTimestamps = blocks.map((b) => b.timestamp);
+
+                const blockStats = {
+                    blockRange: {
+                        startBlock: blockNumbers[0].toString(),
+                        endBlock:
+                            blockNumbers[blockNumbers.length - 1].toString(),
+                        blockCount: blockNumbers.length,
+                    },
+                    timeRange: {
+                        startTime: new Date(
+                            Math.min(...blockTimestamps)
+                        ).toISOString(),
+                        endTime: new Date(
+                            Math.max(...blockTimestamps)
+                        ).toISOString(),
+                        timeSpanSeconds: Math.floor(
+                            (Math.max(...blockTimestamps) -
+                                Math.min(...blockTimestamps)) /
+                                1000
+                        ),
+                    },
+                    uniqueBlocks: uniqueBlocks.size,
+                    averageTransactionsPerBlock: Number(
+                        (transactions.length / uniqueBlocks.size).toFixed(2)
+                    ),
+                };
+
+                // 计算其他统计信息
+                const addressStats = this.calculateAddressStats(transactions);
+                const gasStats = this.calculateGasStats(transactions);
+                const valueStats = this.calculateValueStats(transactions);
+                const contractStats = this.calculateContractStats(transactions);
+
+                // 更新metadata
+                result.metadata = {
+                    ...result.metadata,
+                    total: transactions.length,
+                    queryTime: new Date().toISOString(),
+                    queryType: "transaction",
+                    executionTime: 0,
+                    cached: false,
+                    blockStats,
+                    transactionStats: {
+                        uniqueFromAddresses: addressStats.uniqueFromAddresses,
+                        uniqueToAddresses: addressStats.uniqueToAddresses,
+                        txTypeDistribution: addressStats.txTypeDistribution,
+                        gasStats,
+                        valueStats,
+                        contractStats: contractStats.contractStats,
+                        addressStats: addressStats.addressStats,
+                    },
+                    queryDetails: {
+                        params: result.metadata.queryDetails?.params || {},
+                        query: result.metadata.queryDetails?.query || "",
+                        paramValidation:
+                            result.metadata.queryDetails?.paramValidation || [],
+                    },
                 };
             }
 
@@ -241,11 +351,174 @@ export class FetchTransactionAction {
             };
         }
     }
+
+    private calculateAddressStats(transactions: any[]) {
+        const addressMap = new Map<
+            string,
+            {
+                sendCount: number;
+                receiveCount: number;
+                sendValue: number;
+                receiveValue: number;
+            }
+        >();
+
+        transactions.forEach((tx) => {
+            const from = tx.from_address;
+            const to = tx.to_address;
+            const value = parseFloat(tx.value) || 0;
+
+            if (!addressMap.has(from)) {
+                addressMap.set(from, {
+                    sendCount: 0,
+                    receiveCount: 0,
+                    sendValue: 0,
+                    receiveValue: 0,
+                });
+            }
+            if (!addressMap.has(to)) {
+                addressMap.set(to, {
+                    sendCount: 0,
+                    receiveCount: 0,
+                    sendValue: 0,
+                    receiveValue: 0,
+                });
+            }
+
+            const fromStats = addressMap.get(from)!;
+            const toStats = addressMap.get(to)!;
+
+            fromStats.sendCount++;
+            fromStats.sendValue += value;
+            toStats.receiveCount++;
+            toStats.receiveValue += value;
+        });
+
+        const topSenders = Array.from(addressMap.entries())
+            .map(([address, stats]) => ({
+                address,
+                count: stats.sendCount,
+                totalValue: stats.sendValue.toFixed(18),
+            }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 5);
+
+        const topReceivers = Array.from(addressMap.entries())
+            .map(([address, stats]) => ({
+                address,
+                count: stats.receiveCount,
+                totalValue: stats.receiveValue.toFixed(18),
+            }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 5);
+
+        return {
+            uniqueFromAddresses: new Set(
+                transactions.map((tx) => tx.from_address)
+            ).size,
+            uniqueToAddresses: new Set(transactions.map((tx) => tx.to_address))
+                .size,
+            txTypeDistribution: transactions.reduce(
+                (acc, tx) => {
+                    const type = tx.transaction_type || "unknown";
+                    acc[type] = (acc[type] || 0) + 1;
+                    return acc;
+                },
+                {} as Record<string, number>
+            ),
+            addressStats: {
+                topSenders,
+                topReceivers,
+            },
+        };
+    }
+
+    private calculateGasStats(transactions: any[]) {
+        const gasUsed = transactions.map((tx) =>
+            parseInt(tx.receipt_gas_used || "0", 10)
+        );
+        const gasPrices = transactions.map((tx) =>
+            parseInt(tx.gas_price || "0", 10)
+        );
+
+        const totalGasUsed = gasUsed.reduce((sum, gas) => sum + gas, 0);
+        const totalGasCost = gasUsed.reduce(
+            (sum, gas, i) => sum + gas * gasPrices[i],
+            0
+        );
+
+        return {
+            totalGasUsed,
+            averageGasUsed: Math.floor(totalGasUsed / gasUsed.length) || 0,
+            minGasUsed: Math.min(...gasUsed),
+            maxGasUsed: Math.max(...gasUsed),
+            averageGasPrice:
+                Math.floor(
+                    gasPrices.reduce((sum, price) => sum + price, 0) /
+                        gasPrices.length
+                ) || 0,
+            totalGasCost: (totalGasCost / 1e18).toFixed(18),
+        };
+    }
+
+    private calculateValueStats(transactions: any[]) {
+        const values = transactions.map((tx) => parseFloat(tx.value || "0"));
+        const zeroValueCount = values.filter((v) => v === 0).length;
+
+        const totalValue = values.reduce((sum, val) => sum + val, 0);
+
+        return {
+            totalValue: totalValue.toFixed(18),
+            averageValue: (totalValue / values.length).toFixed(18),
+            minValue: Math.min(...values).toFixed(18),
+            maxValue: Math.max(...values).toFixed(18),
+            zeroValueCount,
+        };
+    }
+
+    private calculateContractStats(transactions: any[]) {
+        const contractTxs = transactions.filter(
+            (tx) => tx.input && tx.input !== "0x"
+        );
+        const normalTxs = transactions.filter(
+            (tx) => !tx.input || tx.input === "0x"
+        );
+
+        const contractAddresses = new Set(
+            contractTxs.map((tx) => tx.to_address)
+        );
+
+        const contractCounts: Record<string, number> = {};
+        contractTxs.forEach((tx) => {
+            const addr = tx.to_address;
+            contractCounts[addr] = (contractCounts[addr] || 0) + 1;
+        });
+
+        const topContracts = Object.entries(contractCounts)
+            .map(([address, count]) => ({
+                address,
+                count: count as number,
+            }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 5);
+
+        return {
+            contractStats: {
+                contractTransactions: contractTxs.length,
+                normalTransactions: normalTxs.length,
+                contractInteractions: {
+                    uniqueContracts: contractAddresses.size,
+                    topContracts,
+                },
+            },
+        };
+    }
 }
 
 export const fetchTransactionAction: Action = {
     name: "fetch_transactions",
-    description: "Fetch Ethereum transactions based on various criteria",
+    description:
+        "Fetch and analyze Ethereum transactions with comprehensive statistics",
     similes: [
         "get transactions",
         "show transfers",
@@ -257,6 +530,32 @@ export const fetchTransactionAction: Action = {
         "list transactions",
         "recent transactions",
         "transaction history",
+        "today's transactions",
+        "yesterday's transfers",
+        "last week's transactions",
+        "monthly transaction history",
+        "transactions from last month",
+        "address transactions",
+        "wallet transfers",
+        "account activity",
+        "address history",
+        "wallet history",
+        "large transactions",
+        "high value transfers",
+        "transactions above",
+        "transfers worth more than",
+        "big eth movements",
+        "contract interactions",
+        "smart contract calls",
+        "contract transactions",
+        "dapp interactions",
+        "protocol transactions",
+        "recent large transfers",
+        "recent large transfers",
+        "high value contract calls",
+        "address contract interactions",
+        "wallet activity last week",
+        "today's big transactions",
     ],
     examples: [
         [
@@ -286,6 +585,33 @@ export const fetchTransactionAction: Action = {
                 },
             },
         ],
+        [
+            {
+                user: "user",
+                content: {
+                    text: "Show me transactions from the last 24 hours",
+                    action: "FETCH_TRANSACTIONS",
+                },
+            },
+        ],
+        [
+            {
+                user: "user",
+                content: {
+                    text: "Find all contract interactions for address 0x1234...",
+                    action: "FETCH_TRANSACTIONS",
+                },
+            },
+        ],
+        [
+            {
+                user: "user",
+                content: {
+                    text: "Show large transactions (>10 ETH) from the last week",
+                    action: "FETCH_TRANSACTIONS",
+                },
+            },
+        ],
     ],
     validate: async (runtime: IAgentRuntime) => {
         const apiKey = runtime.getSetting("DATA_API_KEY");
@@ -304,7 +630,7 @@ export const fetchTransactionAction: Action = {
             const action = new FetchTransactionAction(provider);
 
             const result = await action.fetchTransactions(
-                message.content.text,
+                message,
                 runtime,
                 state
             );
@@ -312,26 +638,93 @@ export const fetchTransactionAction: Action = {
             if (callback) {
                 if (result.success) {
                     const params = result.metadata.queryDetails?.params;
-                    let details = "";
+                    const stats = result.metadata.transactionStats;
+                    const blockStats = result.metadata.blockStats;
+
+                    // Build query details
+                    let queryDetails = "\n📊 Query Parameters:";
                     if (params) {
-                        details = `
-- Address: ${params.address || "any"}
-- Date Range: ${params.startDate || "last 3 months"} to ${
-                            params.endDate || "now"
+                        queryDetails += `
+• Time Range: ${params.startDate || "last 3 months"} to ${params.endDate || "now"}
+• Address Filter: ${params.address ? `${params.address}` : "All addresses"}
+• Value Range: ${params.minValue ? `>${params.minValue} ETH` : "Any value"}${params.maxValue ? ` to <${params.maxValue} ETH` : ""}
+• Results Limit: ${params.limit || 10} transactions
+• Sorting: By ${params.orderBy || "timestamp"} ${params.orderDirection || "DESC"}`;
+                    }
+
+                    // Build block information
+                    let blockInfo = "\n\n🔲 Block Information:";
+                    if (blockStats) {
+                        const timeRange = `${new Date(blockStats.timeRange.startTime).toLocaleString()} to ${new Date(blockStats.timeRange.endTime).toLocaleString()}`;
+                        blockInfo += `
+• Block Range: ${blockStats.blockRange.startBlock} to ${blockStats.blockRange.endBlock}
+• Time Span: ${timeRange} (${Math.floor(blockStats.timeRange.timeSpanSeconds / 60)} minutes)
+• Unique Blocks: ${blockStats.uniqueBlocks}
+• Avg Tx per Block: ${blockStats.averageTransactionsPerBlock}`;
+                    }
+
+                    // Build transaction statistics
+                    let txStats = "\n\n💫 Transaction Analysis:";
+                    if (stats) {
+                        // Transaction type distribution
+                        const txTypes = Object.entries(stats.txTypeDistribution)
+                            .map(([type, count]) => `${type}: ${count}`)
+                            .join(", ");
+
+                        txStats += `
+• Total Transactions: ${result.metadata.total}
+• Transaction Types: ${txTypes}
+• Contract Interactions: ${stats.contractStats.contractTransactions} (${stats.contractStats.contractInteractions.uniqueContracts} unique contracts)
+• Normal Transfers: ${stats.contractStats.normalTransactions}`;
+
+                        // Value statistics
+                        if (
+                            stats.valueStats.totalValue !==
+                            "0.000000000000000000"
+                        ) {
+                            txStats += `
+• Total Value: ${parseFloat(stats.valueStats.totalValue).toFixed(4)} ETH
+• Average Value: ${parseFloat(stats.valueStats.averageValue).toFixed(4)} ETH
+• Max Value: ${parseFloat(stats.valueStats.maxValue).toFixed(4)} ETH
+• Zero Value Tx: ${stats.valueStats.zeroValueCount}`;
                         }
-- Value Range: ${params.minValue ? `>${params.minValue} ETH` : "any"} ${
-                            params.maxValue ? `to <${params.maxValue} ETH` : ""
+
+                        // Gas statistics
+                        txStats += `
+• Total Gas Used: ${stats.gasStats.totalGasUsed.toLocaleString()}
+• Average Gas: ${stats.gasStats.averageGasUsed.toLocaleString()}
+• Total Gas Cost: ${parseFloat(stats.gasStats.totalGasCost).toFixed(4)} ETH`;
+
+                        // Address activity
+                        txStats += `
+• Unique Addresses: ${stats.uniqueFromAddresses} senders, ${stats.uniqueToAddresses} receivers`;
+
+                        // Top activities
+                        if (stats.addressStats.topSenders.length > 0) {
+                            txStats += "\n\n👥 Most Active Addresses:";
+                            txStats += "\n• Top Senders:";
+                            stats.addressStats.topSenders.forEach(
+                                (sender, i) => {
+                                    txStats += `\n  ${i + 1}. ${sender.address} (${sender.count} txs, ${parseFloat(sender.totalValue).toFixed(4)} ETH)`;
+                                }
+                            );
                         }
-- Showing: ${params.limit || 10} transactions
-- Ordered by: ${params.orderBy || "timestamp"} ${
-                            params.orderDirection || "DESC"
-                        }`;
+
+                        if (
+                            stats.contractStats.contractInteractions
+                                .topContracts.length > 0
+                        ) {
+                            txStats += "\n• Most Used Contracts:";
+                            stats.contractStats.contractInteractions.topContracts.forEach(
+                                (contract, i) => {
+                                    txStats += `\n  ${i + 1}. ${contract.address} (${contract.count} interactions)`;
+                                }
+                            );
+                        }
                     }
 
                     callback({
-                        text: `Found ${
-                            result.metadata.total
-                        } transactions with the following criteria:${details}\n\nHere are the details:`,
+                        text: `Found ${result.metadata.total} transactions.${queryDetails}${blockInfo}${txStats}\n\nDetailed transaction data is available in the response.`,
                         content: {
                             success: true,
                             data: result.data,

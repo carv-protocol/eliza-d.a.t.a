@@ -532,32 +532,16 @@ export class DatabaseProvider {
             Note: This analysis is based on simulated data for demonstration purposes.
         `;
     }
-}
 
-export const databaseProvider = (runtime: IAgentRuntime) => {
-    const chain = "ethereum-mainnet";
-    return new DatabaseProvider(chain, runtime);
-};
-
-export const ethereumDataProvider: Provider = {
-    get: async (
+    public async processD_A_T_AQuery(
         runtime: IAgentRuntime,
         message: Memory,
         state: State
-    ): Promise<string | null> => {
+    ): Promise<{ context: string; queryResult: IQueryResult } | null> {
         try {
-            const isActionNone =
-                message.content.action !== "NONE" &&
-                message.content.action !== undefined &&
-                message.content.action !== null;
-            if (isActionNone) {
-                elizaLogger.log(`actions: ${message.content.action}`);
-                return null;
-            }
-            const provider = databaseProvider(runtime);
-            const schema = provider.getDatabaseSchema();
-            const examples = provider.getQueryExamples();
-            const template = provider.getQueryTemplate();
+            const schema = this.getDatabaseSchema();
+            const examples = this.getQueryExamples();
+            const template = this.getQueryTemplate();
 
             if (!state) {
                 state = (await runtime.composeState(message)) as State;
@@ -603,17 +587,18 @@ export const ethereumDataProvider: Provider = {
             await runtime.updateRecentMessageState(state);
 
             // Check for SQL query in the response using class method
-            const sqlQuery = provider.extractSQLQuery(preResponse);
+            const sqlQuery = this.extractSQLQuery(preResponse);
             if (sqlQuery) {
                 elizaLogger.log("%%%% D.A.T.A. Generated SQL query:", sqlQuery);
-                const analysisInstruction = provider.getAnalysisInstruction();
+                const analysisInstruction = this.getAnalysisInstruction();
                 try {
                     // Call query method on provider
-                    const queryResult = await provider.query(sqlQuery);
+                    const queryResult = await this.query(sqlQuery);
 
                     elizaLogger.log("%%%% D.A.T.A. queryResult", queryResult);
                     // Return combined context with query results and analysis instructions
-                    return `
+
+                    const context = `
                     # query by user
                     ${message.content.text}
 
@@ -623,12 +608,53 @@ export const ethereumDataProvider: Provider = {
                     # Analysis Instructions
                     ${analysisInstruction}
                     `;
+                    return {
+                        context: context,
+                        queryResult: queryResult,
+                    };
                 } catch (error) {
                     elizaLogger.error("Error executing query:", error);
-                    return context;
+                    return null;
                 }
             } else {
                 elizaLogger.log("no sql query found in user message");
+            }
+            return null;
+        } catch (error) {
+            elizaLogger.error("Error in processD_A_T_AQuery:", error);
+            return null;
+        }
+    }
+}
+
+export const databaseProvider = (runtime: IAgentRuntime) => {
+    const chain = "ethereum-mainnet";
+    return new DatabaseProvider(chain, runtime);
+};
+
+export const ethereumDataProvider: Provider = {
+    get: async (
+        runtime: IAgentRuntime,
+        message: Memory,
+        state: State
+    ): Promise<string | null> => {
+        try {
+            const isActionNone =
+                message.content.action !== "NONE" &&
+                message.content.action !== undefined &&
+                message.content.action !== null;
+            if (isActionNone) {
+                elizaLogger.log(`actions: ${message.content.action}`);
+                return null;
+            }
+            const provider = databaseProvider(runtime);
+            const result = await provider.processD_A_T_AQuery(
+                runtime,
+                message,
+                state
+            );
+            if (result) {
+                return result.context;
             }
             return null;
         } catch (error) {
