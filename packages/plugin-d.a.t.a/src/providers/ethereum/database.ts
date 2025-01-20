@@ -153,7 +153,7 @@ export class DatabaseProvider {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    Authorization: this.AUTH_TOKEN,
+                    Authorization: this.AUTH_TOKEN ? `${this.AUTH_TOKEN}` : "",
                 },
                 body: JSON.stringify({
                     sql_content: sql,
@@ -546,6 +546,14 @@ export const ethereumDataProvider: Provider = {
         state: State
     ): Promise<string | null> => {
         try {
+            const isActionNone =
+                message.content.action !== "NONE" &&
+                message.content.action !== undefined &&
+                message.content.action !== null;
+            if (isActionNone) {
+                elizaLogger.log(`actions: ${message.content.action}`);
+                return null;
+            }
             const provider = databaseProvider(runtime);
             const schema = provider.getDatabaseSchema();
             const examples = provider.getQueryExamples();
@@ -565,7 +573,7 @@ export const ethereumDataProvider: Provider = {
             const context = JSON.stringify({
                 user: runtime.agentId,
                 content: buildContext,
-                action: "fetch_transactions",
+                action: "NONE",
             });
 
             const preResponse = await generateMessageResponse({
@@ -622,7 +630,7 @@ export const ethereumDataProvider: Provider = {
             } else {
                 elizaLogger.log("no sql query found in user message");
             }
-            return context;
+            return null;
         } catch (error) {
             elizaLogger.error("Error in ethereum data provider:", error);
             return null;

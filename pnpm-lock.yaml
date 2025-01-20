@@ -1128,6 +1128,12 @@ importers:
       '@elizaos/core':
         specifier: workspace:*
         version: link:../core
+      '@elizaos/plugin-evm':
+        specifier: workspace:*
+        version: link:../plugin-evm
+      '@elizaos/plugin-solana':
+        specifier: workspace:*
+        version: link:../plugin-solana
 
   packages/plugin-echochambers:
     dependencies:

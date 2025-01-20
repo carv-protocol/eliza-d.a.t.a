@@ -27,3 +27,27 @@ Given the recent messages, extract the following information about the transacti
 - Order direction (ASC or DESC)
 
 Respond with a JSON markdown block containing only the extracted values.`;
+
+export const fetchTokenInfoTemplate = `Respond with a JSON markdown block containing only the extracted values. Use null for any values that cannot be determined.
+
+Example response:
+\`\`\`json
+{
+    "symbol": "CARV",
+    "platform": "ethereum"
+}
+\`\`\`
+
+{{recentMessages}}
+
+Given the recent messages, extract the following information about the token query:
+- Token symbol (required, remove $ prefix if present)
+- Platform/chain to query (optional, e.g., ethereum, base, solana)
+
+Notes for extraction:
+- Token symbols like "$CARV" and "CARV" should both return "CARV" as the symbol
+- Platform is case-insensitive, normalize to lowercase
+- If no platform is specified, return null for platform
+- Ignore any other information in the message
+
+Respond with a JSON markdown block containing only the extracted values.`;
