@@ -11,7 +11,7 @@ import {
 } from "@elizaos/core";
 
 // API response interface for query results
-interface IQueryResult {
+export interface IQueryResult {
     success: boolean;
     data: any[];
     metadata: {
@@ -26,12 +26,14 @@ interface IQueryResult {
             hasMore: boolean;
         };
     };
+    analysis?: string;
     error?: {
         code: string;
         message: string;
         details?: any;
     };
 }
+
 // API response interface
 interface IApiResponse {
     code: number;
@@ -42,6 +44,11 @@ interface IApiResponse {
             items: (string | number)[];
         }[];
     };
+}
+
+export interface IAnalysisResult {
+    context: string;
+    queryResult: IQueryResult;
 }
 
 export class DatabaseProvider {
@@ -534,11 +541,104 @@ export class DatabaseProvider {
         `;
     }
 
+    private getAnalysisTemplate(): string {
+        return `
+Please analyze the provided Ethereum blockchain data and generate a comprehensive analysis report. Focus on the following aspects:
+
+1. Transaction Overview
+- Total number of transactions and time period covered
+- Block range and statistics (unique blocks, average transactions per block)
+- Success rate and overall transaction patterns
+- Notable trends or anomalies in the dataset
+
+2. Value Analysis
+- Total and average ETH value transferred
+- Distribution of transaction values
+- Significant value transfers
+- Token transfer patterns (if applicable)
+
+3. Gas and Network Analysis
+- Gas usage patterns (average, total, distribution)
+- Gas price trends and fee market conditions
+- Network congestion indicators
+- Transaction efficiency metrics
+
+4. Address Activity
+- Unique addresses and their roles
+- Most active participants (senders/receivers)
+- Contract interactions and patterns
+- Notable address behaviors
+
+5. Technical Insights
+- Transaction type distribution
+- Input data patterns and complexity
+- Smart contract interactions
+- Special transaction characteristics
+
+6. Risk and Security
+- Unusual patterns or anomalies
+- Potential security concerns
+- Notable address behaviors
+- Regulatory considerations
+
+Please provide a natural language analysis that:
+- Uses professional blockchain terminology
+- Highlights significant patterns and anomalies
+- Provides specific examples from the data
+- Draws meaningful conclusions about network usage
+- Includes relevant statistical measures
+- Notes any unusual or suspicious activities
+
+Transaction Data:
+{{transactionData}}
+
+Query Metadata:
+{{queryMetadata}}
+`;
+    }
+
+    public async analyzeQuery(
+        queryResult: IQueryResult,
+        runtime: IAgentRuntime
+    ): Promise<string> {
+        try {
+            if (!queryResult?.data || !queryResult?.metadata) {
+                elizaLogger.warn("Invalid query result for analysis");
+                return null;
+            }
+
+            const template = this.getAnalysisTemplate();
+            const context = template
+                .replace(
+                    "{{transactionData}}",
+                    JSON.stringify(queryResult.data, null, 2)
+                )
+                .replace(
+                    "{{queryMetadata}}",
+                    JSON.stringify(queryResult.metadata, null, 2)
+                );
+
+            const analysisResponse = await generateMessageResponse({
+                runtime,
+                context: context,
+                modelClass: ModelClass.LARGE,
+            });
+
+            // Extract text content from response
+            return typeof analysisResponse === "string"
+                ? analysisResponse
+                : analysisResponse.text || null;
+        } catch (error) {
+            elizaLogger.error("Error in analyzeQuery:", error);
+            return null;
+        }
+    }
+
     public async processD_A_T_AQuery(
         runtime: IAgentRuntime,
         message: Memory,
         state: State
-    ): Promise<{ context: string; queryResult: IQueryResult } | null> {
+    ): Promise<IAnalysisResult | null> {
         try {
             const schema = this.getDatabaseSchema();
             const examples = this.getQueryExamples();
@@ -597,8 +697,16 @@ export class DatabaseProvider {
                     const queryResult = await this.query(sqlQuery);
 
                     elizaLogger.log("%%%% D.A.T.A. queryResult", queryResult);
-                    // Return combined context with query results and analysis instructions
+                    // // Generate analysis for the query result
+                    // const analysis = await this.analyzeQuery(
+                    //     queryResult,
+                    //     runtime
+                    // );
+                    // if (analysis) {
+                    //     queryResult.analysis = analysis;
+                    // }
 
+                    // Return combined context with query results and analysis instructions
                     const context = `
                     # query by user
                     ${message.content.text}

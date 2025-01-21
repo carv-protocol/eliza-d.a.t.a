@@ -240,7 +240,12 @@ export class FetchTransactionAction {
         message: Memory,
         runtime: IAgentRuntime,
         state: State
-    ): Promise<TransactionQueryResult> {
+    ): Promise<{
+        type: "analysis" | "transaction";
+        result: string | TransactionQueryResult;
+    } | null> {
+        let transactionResult: any;
+        let analysisResult: any;
         try {
             const ret = await this.dbProvider.processD_A_T_AQuery(
                 runtime,
@@ -252,103 +257,30 @@ export class FetchTransactionAction {
                 throw new Error("Failed to fetch transactions");
             }
 
-            const result = ret.queryResult as TransactionQueryResult;
+            transactionResult = ret.queryResult as TransactionQueryResult;
 
-            // Enhance result with query details
-            if (result.success && result.data.length > 0) {
-                const transactions = result.data;
+            // Try to get analysis
+            const analysisResult = await this.dbProvider.analyzeQuery(
+                transactionResult,
+                runtime
+            );
 
-                // 区块统计
-                const blocks = transactions.map((tx) => ({
-                    number: tx.block_number,
-                    timestamp: new Date(tx.block_timestamp).getTime(),
-                    hash: tx.block_hash,
-                }));
-
-                const uniqueBlocks = new Set(blocks.map((b) => b.number));
-                const blockNumbers = Array.from(uniqueBlocks)
-                    .map(Number)
-                    .sort((a, b) => a - b);
-                const blockTimestamps = blocks.map((b) => b.timestamp);
-
-                const blockStats = {
-                    blockRange: {
-                        startBlock: blockNumbers[0].toString(),
-                        endBlock:
-                            blockNumbers[blockNumbers.length - 1].toString(),
-                        blockCount: blockNumbers.length,
-                    },
-                    timeRange: {
-                        startTime: new Date(
-                            Math.min(...blockTimestamps)
-                        ).toISOString(),
-                        endTime: new Date(
-                            Math.max(...blockTimestamps)
-                        ).toISOString(),
-                        timeSpanSeconds: Math.floor(
-                            (Math.max(...blockTimestamps) -
-                                Math.min(...blockTimestamps)) /
-                                1000
-                        ),
-                    },
-                    uniqueBlocks: uniqueBlocks.size,
-                    averageTransactionsPerBlock: Number(
-                        (transactions.length / uniqueBlocks.size).toFixed(2)
-                    ),
-                };
-
-                // 计算其他统计信息
-                const addressStats = this.calculateAddressStats(transactions);
-                const gasStats = this.calculateGasStats(transactions);
-                const valueStats = this.calculateValueStats(transactions);
-                const contractStats = this.calculateContractStats(transactions);
-
-                // 更新metadata
-                result.metadata = {
-                    ...result.metadata,
-                    total: transactions.length,
-                    queryTime: new Date().toISOString(),
-                    queryType: "transaction",
-                    executionTime: 0,
-                    cached: false,
-                    blockStats,
-                    transactionStats: {
-                        uniqueFromAddresses: addressStats.uniqueFromAddresses,
-                        uniqueToAddresses: addressStats.uniqueToAddresses,
-                        txTypeDistribution: addressStats.txTypeDistribution,
-                        gasStats,
-                        valueStats,
-                        contractStats: contractStats.contractStats,
-                        addressStats: addressStats.addressStats,
-                    },
-                    queryDetails: {
-                        params: result.metadata.queryDetails?.params || {},
-                        query: result.metadata.queryDetails?.query || "",
-                        paramValidation:
-                            result.metadata.queryDetails?.paramValidation || [],
-                    },
+            // If analysis fails, return transaction result
+            if (!analysisResult) {
+                return {
+                    type: "transaction",
+                    result: transactionResult,
                 };
             }
 
-            return result;
+            // If analysis succeeds, return analysis result
+            return {
+                type: "analysis",
+                result: analysisResult,
+            };
         } catch (error) {
             elizaLogger.error("Error fetching transactions:", error);
-            return {
-                success: false,
-                data: [],
-                metadata: {
-                    total: 0,
-                    queryTime: new Date().toISOString(),
-                    queryType: "transaction",
-                    executionTime: 0,
-                    cached: false,
-                },
-                error: {
-                    code: "FETCH_ERROR",
-                    message: error.message,
-                    details: error,
-                },
-            };
+            return null;
         }
     }
 
@@ -636,110 +568,24 @@ export const fetchTransactionAction: Action = {
             );
 
             if (callback) {
-                if (result.success) {
-                    const params = result.metadata.queryDetails?.params;
-                    const stats = result.metadata.transactionStats;
-                    const blockStats = result.metadata.blockStats;
-
-                    // Build query details
-                    let queryDetails = "\n📊 Query Parameters:";
-                    if (params) {
-                        queryDetails += `
-• Time Range: ${params.startDate || "last 3 months"} to ${params.endDate || "now"}
-• Address Filter: ${params.address ? `${params.address}` : "All addresses"}
-• Value Range: ${params.minValue ? `>${params.minValue} ETH` : "Any value"}${params.maxValue ? ` to <${params.maxValue} ETH` : ""}
-• Results Limit: ${params.limit || 10} transactions
-• Sorting: By ${params.orderBy || "timestamp"} ${params.orderDirection || "DESC"}`;
+                if (result) {
+                    if (result.type === "analysis") {
+                        callback({
+                            text: result.result as string,
+                        });
+                    } else {
+                        callback({
+                            text: JSON.stringify(result.result, null, 2),
+                        });
                     }
-
-                    // Build block information
-                    let blockInfo = "\n\n🔲 Block Information:";
-                    if (blockStats) {
-                        const timeRange = `${new Date(blockStats.timeRange.startTime).toLocaleString()} to ${new Date(blockStats.timeRange.endTime).toLocaleString()}`;
-                        blockInfo += `
-• Block Range: ${blockStats.blockRange.startBlock} to ${blockStats.blockRange.endBlock}
-• Time Span: ${timeRange} (${Math.floor(blockStats.timeRange.timeSpanSeconds / 60)} minutes)
-• Unique Blocks: ${blockStats.uniqueBlocks}
-• Avg Tx per Block: ${blockStats.averageTransactionsPerBlock}`;
-                    }
-
-                    // Build transaction statistics
-                    let txStats = "\n\n💫 Transaction Analysis:";
-                    if (stats) {
-                        // Transaction type distribution
-                        const txTypes = Object.entries(stats.txTypeDistribution)
-                            .map(([type, count]) => `${type}: ${count}`)
-                            .join(", ");
-
-                        txStats += `
-• Total Transactions: ${result.metadata.total}
-• Transaction Types: ${txTypes}
-• Contract Interactions: ${stats.contractStats.contractTransactions} (${stats.contractStats.contractInteractions.uniqueContracts} unique contracts)
-• Normal Transfers: ${stats.contractStats.normalTransactions}`;
-
-                        // Value statistics
-                        if (
-                            stats.valueStats.totalValue !==
-                            "0.000000000000000000"
-                        ) {
-                            txStats += `
-• Total Value: ${parseFloat(stats.valueStats.totalValue).toFixed(4)} ETH
-• Average Value: ${parseFloat(stats.valueStats.averageValue).toFixed(4)} ETH
-• Max Value: ${parseFloat(stats.valueStats.maxValue).toFixed(4)} ETH
-• Zero Value Tx: ${stats.valueStats.zeroValueCount}`;
-                        }
-
-                        // Gas statistics
-                        txStats += `
-• Total Gas Used: ${stats.gasStats.totalGasUsed.toLocaleString()}
-• Average Gas: ${stats.gasStats.averageGasUsed.toLocaleString()}
-• Total Gas Cost: ${parseFloat(stats.gasStats.totalGasCost).toFixed(4)} ETH`;
-
-                        // Address activity
-                        txStats += `
-• Unique Addresses: ${stats.uniqueFromAddresses} senders, ${stats.uniqueToAddresses} receivers`;
-
-                        // Top activities
-                        if (stats.addressStats.topSenders.length > 0) {
-                            txStats += "\n\n👥 Most Active Addresses:";
-                            txStats += "\n• Top Senders:";
-                            stats.addressStats.topSenders.forEach(
-                                (sender, i) => {
-                                    txStats += `\n  ${i + 1}. ${sender.address} (${sender.count} txs, ${parseFloat(sender.totalValue).toFixed(4)} ETH)`;
-                                }
-                            );
-                        }
-
-                        if (
-                            stats.contractStats.contractInteractions
-                                .topContracts.length > 0
-                        ) {
-                            txStats += "\n• Most Used Contracts:";
-                            stats.contractStats.contractInteractions.topContracts.forEach(
-                                (contract, i) => {
-                                    txStats += `\n  ${i + 1}. ${contract.address} (${contract.count} interactions)`;
-                                }
-                            );
-                        }
-                    }
-
-                    callback({
-                        text: `Found ${result.metadata.total} transactions.${queryDetails}${blockInfo}${txStats}\n\nDetailed transaction data is available in the response.`,
-                        content: {
-                            success: true,
-                            data: result.data,
-                            metadata: result.metadata,
-                        },
-                    });
                 } else {
                     callback({
-                        text: `Error fetching transactions: ${result.error?.message}`,
-                        content: { error: result.error },
+                        text: "Query failed, please try again",
                     });
                 }
             }
 
-            return result.success;
+            return true;
         } catch (error) {
             elizaLogger.error("Error in fetch transaction action:", error);
             if (callback) {
