@@ -149,7 +149,8 @@ export class DatabaseProvider {
 
     private async sendSqlQuery(sql: string): Promise<IApiResponse> {
         try {
-            const response = await fetch(this.API_URL, {
+            const url = `${this.API_URL}/sql_query`;
+            const response = await fetch(url, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",

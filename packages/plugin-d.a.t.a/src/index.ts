@@ -5,7 +5,7 @@ import { transferAction } from "@elizaos/plugin-evm";
 export const onchainDataPlugin: Plugin = {
     name: "onchain data plugin",
     description: "Enables onchain data fetching",
-    actions: [fetchTransactionAction],
+    actions: [],
     providers: [ethereumDataProvider],
     evaluators: [],
     // separate examples will be added for services and clients
