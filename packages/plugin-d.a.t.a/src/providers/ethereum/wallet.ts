@@ -3,7 +3,10 @@ import {
     createWalletClient,
     formatUnits,
     http,
+    parseEther,
+    parseUnits,
 } from "viem";
+import { deployContract } from "viem/actions";
 import { privateKeyToAccount } from "viem/accounts";
 import type { IAgentRuntime, Provider, Memory, State } from "@elizaos/core";
 import type {
@@ -16,8 +19,8 @@ import type {
     PrivateKeyAccount,
 } from "viem";
 import * as viemChains from "viem/chains";
-
 import type { SupportedChain } from "../../types";
+import { ERC20_ABI, ERC20_BYTECODE } from "./utils";
 
 export class WalletProvider {
     private currentChain: SupportedChain = "mainnet";
@@ -167,6 +170,66 @@ export class WalletProvider {
             : baseChain;
 
         return viemChain;
+    }
+
+    async deployERC20(
+        name: string,
+        symbol: string,
+        decimals: number = 18,
+        initialAmount: string = "1000000"
+    ): Promise<{
+        address: Address;
+        hash: `0x${string}`;
+    }> {
+        try {
+            // Validate inputs
+            if (!name || !symbol) {
+                throw new Error("Name and symbol are required");
+            }
+            if (decimals < 0 || decimals > 18) {
+                throw new Error("Decimals must be between 0 and 18");
+            }
+            if (isNaN(Number(initialAmount))) {
+                throw new Error("Initial amount must be a valid number");
+            }
+
+            const walletClient = this.getWalletClient(this.currentChain);
+            const chain = this.getCurrentChain();
+            const publicClient = this.getPublicClient(this.currentChain);
+
+            // Convert initial amount to proper units
+            const initialSupply = parseUnits(initialAmount, decimals);
+
+            // Deploy contract
+            const hash = await walletClient.deployContract({
+                abi: ERC20_ABI,
+                bytecode: ERC20_BYTECODE as `0x${string}`,
+                args: [name, symbol, decimals, initialSupply] as const,
+                chain,
+            });
+
+            // Wait for deployment confirmation
+            const receipt = await publicClient.waitForTransactionReceipt({
+                hash,
+                timeout: 60_000, // 60 seconds timeout
+            });
+
+            if (!receipt.contractAddress) {
+                throw new Error(
+                    "Contract deployment failed - no contract address returned"
+                );
+            }
+
+            return {
+                address: receipt.contractAddress,
+                hash,
+            };
+        } catch (error) {
+            console.error("Error deploying ERC20 contract:", error);
+            throw error instanceof Error
+                ? error
+                : new Error("Unknown error during ERC20 deployment");
+        }
     }
 }
 

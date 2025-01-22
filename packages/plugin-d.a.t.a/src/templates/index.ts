@@ -108,3 +108,35 @@ Respond with a JSON markdown block containing only the extracted values. All fie
 }
 \`\`\`
 `;
+
+export const deployTokenTemplate = `Respond with a JSON markdown block containing only the extracted values. Use null for any values that cannot be determined.
+
+Example response:
+\`\`\`json
+{
+    "name": "My Token",
+    "symbol": "MTK",
+    "decimals": 18,
+    "initialAmount": "1000000",
+    "chain": "ethereum"
+}
+\`\`\`
+
+{{recentMessages}}
+
+Given the recent messages, extract the following information about the token deployment:
+- Token name (required): Full name of the token (e.g., "My Token", "USD Tether")
+- Token symbol (required): Short symbol for the token (e.g., "MTK", "USDT")
+- Decimals (optional): Number of decimal places (default: 18, range: 0-18)
+- Initial amount (optional): Initial token supply as string (default: "1000000")
+- Chain (optional): Blockchain network to deploy on (e.g., "ethereum", "base")
+
+Notes for extraction:
+- Token name should be a descriptive string
+- Token symbol should be 2-6 characters, uppercase
+- Decimals must be a number between 0 and 18
+- Initial amount should be a string representing the number of tokens
+- Chain name should be normalized to lowercase
+- Use default values for optional parameters if not specified
+
+Respond with a JSON markdown block containing only the extracted values.`;
