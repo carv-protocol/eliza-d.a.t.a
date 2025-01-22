@@ -15,7 +15,9 @@
     "dependencies": {
         "@elizaos/core": "workspace:*",
         "@elizaos/plugin-evm": "workspace:*",
-        "@elizaos/plugin-solana": "workspace:*"
+        "@elizaos/plugin-solana": "workspace:*",
+        "@thirdweb-dev/sdk": "^4.0.99",
+        "viem": "2.21.53"
     },
     "repository": {
         "type": "git",
