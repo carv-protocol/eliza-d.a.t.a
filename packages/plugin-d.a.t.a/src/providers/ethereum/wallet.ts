@@ -20,7 +20,7 @@ import type {
 } from "viem";
 import * as viemChains from "viem/chains";
 import type { SupportedChain } from "../../types";
-import { ERC20_ABI, ERC20_BYTECODE } from "./utils";
+import { ERC20_ABI, ERC20_BYTECODE } from "../../utils/token";
 
 export class WalletProvider {
     private currentChain: SupportedChain = "mainnet";

@@ -140,3 +140,54 @@ Notes for extraction:
 - Use default values for optional parameters if not specified
 
 Respond with a JSON markdown block containing only the extracted values.`;
+
+export const airdropTokenTemplate = `Respond with a JSON markdown block containing only the extracted values. Use null for any values that cannot be determined.
+
+Example response (single amount):
+\`\`\`json
+{
+    "tokenAddress": "0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
+    "recipients": [
+        "0x1234567890123456789012345678901234567890",
+        "0x2345678901234567890123456789012345678901"
+    ],
+    "amount": "100",
+    "amounts": null
+}
+\`\`\`
+
+Example response (multiple amounts):
+\`\`\`json
+{
+    "tokenAddress": "0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
+    "recipients": [
+        "0x1234567890123456789012345678901234567890",
+        "0x2345678901234567890123456789012345678901"
+    ],
+    "amount": null,
+    "amounts": [
+        "100",
+        "200"
+    ]
+}
+\`\`\`
+
+{{recentMessages}}
+
+Given the recent messages, extract the following information about the token airdrop:
+- Token address (required): The ERC20 token contract address to airdrop
+- Recipients (required): Array of Ethereum addresses to receive tokens
+- Amount (optional): Single amount to send to all recipients
+- Amounts (optional): Array of amounts corresponding to each recipient
+
+Notes for extraction:
+- Token address must be a valid Ethereum address starting with "0x"
+- Recipients must be an array of valid Ethereum addresses
+- Either amount OR amounts must be provided, not both
+- If amount is provided, it will be used for all recipients
+- If amounts is provided, its length must match recipients length
+- All amounts should be strings representing token amounts
+- Recipients array must not be empty
+- All addresses must be checksummed
+
+Respond with a JSON markdown block containing only the extracted values.`;
