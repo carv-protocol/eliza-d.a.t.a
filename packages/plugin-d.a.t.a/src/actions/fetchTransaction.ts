@@ -181,61 +181,6 @@ export class FetchTransactionAction {
         return validationMessages;
     }
 
-    private buildSqlQuery(params: FetchTransactionParams): string {
-        const conditions: string[] = [];
-
-        // Add time range condition
-        if (!params.startDate) {
-            conditions.push(
-                "date_parse(date, '%Y-%m-%d') >= date_add('month', -3, current_date)"
-            );
-        } else {
-            conditions.push(`date >= '${params.startDate}'`);
-            if (params.endDate) {
-                conditions.push(`date <= '${params.endDate}'`);
-            }
-        }
-
-        // Add address condition
-        if (params.address) {
-            conditions.push(
-                `(from_address = '${params.address}' OR to_address = '${params.address}')`
-            );
-        }
-
-        // Add value conditions
-        if (params.minValue) {
-            // Convert ETH to Wei for comparison
-            const minValueWei = (parseFloat(params.minValue) * 1e18).toString();
-            conditions.push(`value >= ${minValueWei}`);
-        }
-        if (params.maxValue) {
-            const maxValueWei = (parseFloat(params.maxValue) * 1e18).toString();
-            conditions.push(`value <= ${maxValueWei}`);
-        }
-
-        // Build the final query
-        const query = `
-            SELECT
-                hash,
-                block_number,
-                block_timestamp,
-                from_address,
-                to_address,
-                value / 1e18 as value_eth,
-                gas,
-                gas_price
-            FROM eth.transactions
-            WHERE ${conditions.join(" AND ")}
-            ORDER BY ${params.orderBy || "block_timestamp"} ${
-                params.orderDirection || "DESC"
-            }
-            LIMIT ${params.limit || 10}
-        `;
-
-        return query.trim();
-    }
-
     public async fetchTransactions(
         message: Memory,
         runtime: IAgentRuntime,
@@ -259,11 +204,13 @@ export class FetchTransactionAction {
 
             transactionResult = ret.queryResult as TransactionQueryResult;
 
-            // Try to get analysis
-            const analysisResult = await this.dbProvider.analyzeQuery(
-                transactionResult,
-                runtime
-            );
+            // // Try to get analysis
+            // analysisResult = await this.dbProvider.analyzeQuery(
+            //     transactionResult,
+            //     message,
+            //     runtime,
+            //     state
+            // );
 
             // If analysis fails, return transaction result
             if (!analysisResult) {
@@ -282,168 +229,6 @@ export class FetchTransactionAction {
             elizaLogger.error("Error fetching transactions:", error);
             return null;
         }
-    }
-
-    private calculateAddressStats(transactions: any[]) {
-        const addressMap = new Map<
-            string,
-            {
-                sendCount: number;
-                receiveCount: number;
-                sendValue: number;
-                receiveValue: number;
-            }
-        >();
-
-        transactions.forEach((tx) => {
-            const from = tx.from_address;
-            const to = tx.to_address;
-            const value = parseFloat(tx.value) || 0;
-
-            if (!addressMap.has(from)) {
-                addressMap.set(from, {
-                    sendCount: 0,
-                    receiveCount: 0,
-                    sendValue: 0,
-                    receiveValue: 0,
-                });
-            }
-            if (!addressMap.has(to)) {
-                addressMap.set(to, {
-                    sendCount: 0,
-                    receiveCount: 0,
-                    sendValue: 0,
-                    receiveValue: 0,
-                });
-            }
-
-            const fromStats = addressMap.get(from)!;
-            const toStats = addressMap.get(to)!;
-
-            fromStats.sendCount++;
-            fromStats.sendValue += value;
-            toStats.receiveCount++;
-            toStats.receiveValue += value;
-        });
-
-        const topSenders = Array.from(addressMap.entries())
-            .map(([address, stats]) => ({
-                address,
-                count: stats.sendCount,
-                totalValue: stats.sendValue.toFixed(18),
-            }))
-            .sort((a, b) => b.count - a.count)
-            .slice(0, 5);
-
-        const topReceivers = Array.from(addressMap.entries())
-            .map(([address, stats]) => ({
-                address,
-                count: stats.receiveCount,
-                totalValue: stats.receiveValue.toFixed(18),
-            }))
-            .sort((a, b) => b.count - a.count)
-            .slice(0, 5);
-
-        return {
-            uniqueFromAddresses: new Set(
-                transactions.map((tx) => tx.from_address)
-            ).size,
-            uniqueToAddresses: new Set(transactions.map((tx) => tx.to_address))
-                .size,
-            txTypeDistribution: transactions.reduce(
-                (acc, tx) => {
-                    const type = tx.transaction_type || "unknown";
-                    acc[type] = (acc[type] || 0) + 1;
-                    return acc;
-                },
-                {} as Record<string, number>
-            ),
-            addressStats: {
-                topSenders,
-                topReceivers,
-            },
-        };
-    }
-
-    private calculateGasStats(transactions: any[]) {
-        const gasUsed = transactions.map((tx) =>
-            parseInt(tx.receipt_gas_used || "0", 10)
-        );
-        const gasPrices = transactions.map((tx) =>
-            parseInt(tx.gas_price || "0", 10)
-        );
-
-        const totalGasUsed = gasUsed.reduce((sum, gas) => sum + gas, 0);
-        const totalGasCost = gasUsed.reduce(
-            (sum, gas, i) => sum + gas * gasPrices[i],
-            0
-        );
-
-        return {
-            totalGasUsed,
-            averageGasUsed: Math.floor(totalGasUsed / gasUsed.length) || 0,
-            minGasUsed: Math.min(...gasUsed),
-            maxGasUsed: Math.max(...gasUsed),
-            averageGasPrice:
-                Math.floor(
-                    gasPrices.reduce((sum, price) => sum + price, 0) /
-                        gasPrices.length
-                ) || 0,
-            totalGasCost: (totalGasCost / 1e18).toFixed(18),
-        };
-    }
-
-    private calculateValueStats(transactions: any[]) {
-        const values = transactions.map((tx) => parseFloat(tx.value || "0"));
-        const zeroValueCount = values.filter((v) => v === 0).length;
-
-        const totalValue = values.reduce((sum, val) => sum + val, 0);
-
-        return {
-            totalValue: totalValue.toFixed(18),
-            averageValue: (totalValue / values.length).toFixed(18),
-            minValue: Math.min(...values).toFixed(18),
-            maxValue: Math.max(...values).toFixed(18),
-            zeroValueCount,
-        };
-    }
-
-    private calculateContractStats(transactions: any[]) {
-        const contractTxs = transactions.filter(
-            (tx) => tx.input && tx.input !== "0x"
-        );
-        const normalTxs = transactions.filter(
-            (tx) => !tx.input || tx.input === "0x"
-        );
-
-        const contractAddresses = new Set(
-            contractTxs.map((tx) => tx.to_address)
-        );
-
-        const contractCounts: Record<string, number> = {};
-        contractTxs.forEach((tx) => {
-            const addr = tx.to_address;
-            contractCounts[addr] = (contractCounts[addr] || 0) + 1;
-        });
-
-        const topContracts = Object.entries(contractCounts)
-            .map(([address, count]) => ({
-                address,
-                count: count as number,
-            }))
-            .sort((a, b) => b.count - a.count)
-            .slice(0, 5);
-
-        return {
-            contractStats: {
-                contractTransactions: contractTxs.length,
-                normalTransactions: normalTxs.length,
-                contractInteractions: {
-                    uniqueContracts: contractAddresses.size,
-                    topContracts,
-                },
-            },
-        };
     }
 }
 
@@ -547,8 +332,7 @@ export const fetchTransactionAction: Action = {
     ],
     validate: async (runtime: IAgentRuntime) => {
         const apiKey = runtime.getSetting("DATA_API_KEY");
-        const authToken = runtime.getSetting("DATA_AUTH_TOKEN");
-        return !!(apiKey && authToken);
+        return !!apiKey;
     },
     handler: async (
         runtime: IAgentRuntime,

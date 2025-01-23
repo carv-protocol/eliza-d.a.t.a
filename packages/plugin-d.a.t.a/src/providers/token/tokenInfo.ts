@@ -30,8 +30,8 @@ export class TokenInfoProvider {
 
     constructor(runtime: IAgentRuntime) {
         // Get API configuration from runtime settings
-        this.API_URL = runtime.getSetting("TOKEN_INFO_API_URL");
-        this.AUTH_TOKEN = runtime.getSetting("TOKEN_INFO_AUTH_TOKEN");
+        this.API_URL = runtime.getSetting("DATA_API_KEY");
+        this.AUTH_TOKEN = runtime.getSetting("DATA_AUTH_TOKEN");
     }
 
     /**

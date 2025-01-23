@@ -156,7 +156,8 @@ export const twitterBalanceAction: Action = {
         ],
     ],
     validate: async (runtime: IAgentRuntime) => {
-        return true; // No specific validation needed for this action
+        const apiKey = runtime.getSetting("DATA_API_KEY");
+        return !!apiKey;
     },
     handler: async (
         runtime: IAgentRuntime,

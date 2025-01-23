@@ -55,11 +55,16 @@ export class DatabaseProvider {
     private chain: string;
     private readonly API_URL: string;
     private readonly AUTH_TOKEN: string;
-
+    private readonly PROVIDER_ANALYSIS: boolean;
     constructor(chain: string, runtime: IAgentRuntime) {
         this.chain = chain;
         this.API_URL = runtime.getSetting("DATA_API_KEY");
         this.AUTH_TOKEN = runtime.getSetting("DATA_AUTH_TOKEN");
+        this.PROVIDER_ANALYSIS =
+            runtime.getSetting("PROVIDER_ANALYSIS") === "true";
+    }
+    getProviderAnalysis(): boolean {
+        return this.PROVIDER_ANALYSIS;
     }
 
     public extractSQLQuery(preResponse: any): string | null {
@@ -599,12 +604,20 @@ Query Metadata:
 
     public async analyzeQuery(
         queryResult: IQueryResult,
-        runtime: IAgentRuntime
+        message: Memory,
+        runtime: IAgentRuntime,
+        state: State
     ): Promise<string> {
         try {
             if (!queryResult?.data || !queryResult?.metadata) {
                 elizaLogger.warn("Invalid query result for analysis");
                 return null;
+            }
+
+            if (!state) {
+                state = (await runtime.composeState(message)) as State;
+            } else {
+                state = await runtime.updateRecentMessageState(state);
             }
 
             const template = this.getAnalysisTemplate();
@@ -696,15 +709,10 @@ Query Metadata:
                     // Call query method on provider
                     const queryResult = await this.query(sqlQuery);
 
-                    elizaLogger.log("%%%% D.A.T.A. queryResult", queryResult);
-                    // // Generate analysis for the query result
-                    // const analysis = await this.analyzeQuery(
-                    //     queryResult,
-                    //     runtime
-                    // );
-                    // if (analysis) {
-                    //     queryResult.analysis = analysis;
-                    // }
+                    elizaLogger.log(
+                        "%%%% D.A.T.A. queryResult",
+                        queryResult.success
+                    );
 
                     // Return combined context with query results and analysis instructions
                     const context = `
@@ -748,15 +756,10 @@ export const ethereumDataProvider: Provider = {
         state: State
     ): Promise<string | null> => {
         try {
-            const isActionNone =
-                message.content.action !== "NONE" &&
-                message.content.action !== undefined &&
-                message.content.action !== null;
-            if (isActionNone) {
-                elizaLogger.log(`actions: ${message.content.action}`);
+            const provider = databaseProvider(runtime);
+            if (!provider.getProviderAnalysis()) {
                 return null;
             }
-            const provider = databaseProvider(runtime);
             const result = await provider.processD_A_T_AQuery(
                 runtime,
                 message,

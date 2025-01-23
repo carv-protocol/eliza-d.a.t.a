@@ -157,7 +157,7 @@ This token is available on ${info.contract_infos.length} platform${
             const paramsJson = (await generateObject({
                 runtime,
                 context,
-                modelClass: ModelClass.SMALL,
+                modelClass: ModelClass.LARGE,
             })) as unknown as FetchTokenInfoParams;
 
             // Validate parameters
@@ -262,9 +262,8 @@ export const fetchTokenInfoAction: Action = {
         }
     },
     validate: async (runtime: IAgentRuntime) => {
-        const apiKey = runtime.getSetting("TOKEN_INFO_API_KEY");
-        const authToken = runtime.getSetting("TOKEN_INFO_AUTH_TOKEN");
-        return !!(apiKey && authToken);
+        const apiKey = runtime.getSetting("DATA_API_KEY");
+        return !!apiKey;
     },
     examples: [
         [
