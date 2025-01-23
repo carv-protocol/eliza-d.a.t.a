@@ -5,19 +5,15 @@ import {
     Memory,
     State,
     elizaLogger,
-    composeContext,
-    generateObject,
-    ModelClass,
 } from "@elizaos/core";
 import {
     TokenInfoProvider,
-    tokenInfoProvider,
+    createTokenInfoProvider,
 } from "../providers/token/tokenInfo";
-import { fetchTokenInfoTemplate } from "../templates";
 
 // Query parameter interface
 interface FetchTokenInfoParams {
-    symbol: string; // Token symbol (e.g., "CARV")
+    ticker: string; // Token ticker (e.g., "CARV")
     platform?: string; // Specific platform to query (optional)
 }
 
@@ -39,6 +35,8 @@ interface TokenInfoQueryResult {
     metadata: {
         queryTime: string;
         executionTime: number;
+        queryType: "token";
+        cached: boolean;
         queryDetails?: {
             params: FetchTokenInfoParams;
         };
@@ -59,13 +57,13 @@ export class FetchTokenInfoAction {
     private validateParams(params: FetchTokenInfoParams): string[] {
         const validationMessages: string[] = [];
 
-        if (!params.symbol) {
-            validationMessages.push("Token symbol is required");
+        if (!params.ticker) {
+            validationMessages.push("Token ticker is required");
         }
 
-        // Remove any $ prefix from symbol
-        if (params.symbol?.startsWith("$")) {
-            params.symbol = params.symbol.substring(1);
+        // Remove any $ prefix from ticker
+        if (params.ticker?.startsWith("$")) {
+            params.ticker = params.ticker.substring(1);
         }
 
         // Additional validations as needed
@@ -143,68 +141,55 @@ This token is available on ${info.contract_infos.length} platform${
      * Fetch token information
      */
     public async fetchTokenInfo(
-        message: string,
+        message: Memory,
         runtime: IAgentRuntime,
         state: State
-    ): Promise<TokenInfoQueryResult> {
+    ): Promise<{
+        type: "analysis" | "token";
+        result: string | TokenInfoQueryResult;
+    } | null> {
+        let tokenResult: TokenInfoQueryResult;
+        let analysisResult: string | null;
+
         try {
-            // Parse parameters using LLM
-            const context = composeContext({
-                state,
-                template: fetchTokenInfoTemplate,
-            });
-
-            const paramsJson = (await generateObject({
+            const ret = await this.provider.processD_A_T_AQuery(
                 runtime,
-                context,
-                modelClass: ModelClass.SMALL,
-            })) as unknown as FetchTokenInfoParams;
+                message,
+                state
+            );
 
-            // Validate parameters
-            const validationMessages = this.validateParams(paramsJson);
-            if (validationMessages.length > 0) {
-                throw new Error(validationMessages.join("; "));
+            if (!ret || !ret.queryResult) {
+                throw new Error("Failed to fetch token information");
             }
 
-            elizaLogger.log(
-                `Fetching token info for symbol: ${paramsJson.symbol}`
-            );
-            const startTime = Date.now();
+            tokenResult = ret.queryResult as unknown as TokenInfoQueryResult;
 
-            // Query token info
-            const tokenInfo = await this.provider.queryTokenInfo(
-                paramsJson.symbol
-            );
+            // // Try to get analysis if provider analysis is enabled
+            // if (this.provider.getProviderAnalysis()) {
+            //     analysisResult = await this.provider.analyzeQuery(
+            //         tokenResult,
+            //         message,
+            //         runtime,
+            //         state
+            //     );
+            // }
 
-            // Prepare result
-            const result: TokenInfoQueryResult = {
-                success: true,
-                data: tokenInfo,
-                metadata: {
-                    queryTime: new Date().toISOString(),
-                    executionTime: Date.now() - startTime,
-                    queryDetails: {
-                        params: paramsJson,
-                    },
-                },
+            // If analysis fails or is disabled, return token result
+            if (!analysisResult) {
+                return {
+                    type: "token",
+                    result: tokenResult,
+                };
+            }
+
+            // If analysis succeeds, return analysis result
+            return {
+                type: "analysis",
+                result: analysisResult,
             };
-
-            return result;
         } catch (error) {
             elizaLogger.error("Error fetching token info:", error);
-            return {
-                success: false,
-                data: null,
-                metadata: {
-                    queryTime: new Date().toISOString(),
-                    executionTime: 0,
-                },
-                error: {
-                    code: "FETCH_ERROR",
-                    message: error.message,
-                    details: error,
-                },
-            };
+            return null;
         }
     }
 }
@@ -221,35 +206,51 @@ export const fetchTokenInfoAction: Action = {
         callback?: HandlerCallback
     ) => {
         try {
-            const provider = tokenInfoProvider(runtime);
+            const provider = createTokenInfoProvider(runtime);
             const action = new FetchTokenInfoAction(provider);
 
-            const result = await action.fetchTokenInfo(
-                message.content.text,
-                runtime,
-                state
-            );
+            const result = await action.fetchTokenInfo(message, runtime, state);
 
             if (callback) {
-                if (result.success) {
-                    const analysisText = action.processTokenInfo(result.data);
-                    callback({
-                        text: analysisText,
-                        content: {
-                            success: true,
-                            data: result.data,
-                            metadata: result.metadata,
-                        },
-                    });
+                if (result) {
+                    if (result.type === "analysis") {
+                        callback({
+                            text: result.result as string,
+                        });
+                    } else {
+                        const tokenResult =
+                            result.result as TokenInfoQueryResult;
+                        if (tokenResult.success) {
+                            const analysisText = action.processTokenInfo(
+                                tokenResult.data
+                            );
+                            callback({
+                                text: analysisText,
+                                content: {
+                                    success: true,
+                                    data: tokenResult.data,
+                                    metadata: tokenResult.metadata,
+                                },
+                            });
+                        } else {
+                            callback({
+                                text: `Error fetching token info: ${tokenResult.error?.message}`,
+                                content: { error: tokenResult.error },
+                            });
+                        }
+                    }
                 } else {
                     callback({
-                        text: `Error fetching token info: ${result.error?.message}`,
-                        content: { error: result.error },
+                        text: "Failed to fetch token information. Please try again.",
                     });
                 }
             }
 
-            return result.success;
+            return (
+                result?.type === "analysis" ||
+                (result?.type === "token" &&
+                    (result.result as TokenInfoQueryResult).success)
+            );
         } catch (error) {
             elizaLogger.error("Error in fetch token info action:", error);
             if (callback) {
@@ -262,9 +263,8 @@ export const fetchTokenInfoAction: Action = {
         }
     },
     validate: async (runtime: IAgentRuntime) => {
-        const apiKey = runtime.getSetting("TOKEN_INFO_API_KEY");
-        const authToken = runtime.getSetting("TOKEN_INFO_AUTH_TOKEN");
-        return !!(apiKey && authToken);
+        const apiKey = runtime.getSetting("DATA_API_KEY");
+        return !!apiKey;
     },
     examples: [
         [
@@ -327,70 +327,6 @@ export const fetchTokenInfoAction: Action = {
                 user: "assistant",
                 content: {
                     text: "I'll check the categories and use cases for CARV",
-                    action: "FETCH_TOKEN_INFO",
-                },
-            },
-        ],
-        [
-            {
-                user: "user",
-                content: {
-                    text: "analyze CARV for me",
-                    action: "FETCH_TOKEN_INFO",
-                },
-            },
-            {
-                user: "assistant",
-                content: {
-                    text: "I'll provide a comprehensive analysis of the CARV token",
-                    action: "FETCH_TOKEN_INFO",
-                },
-            },
-        ],
-        [
-            {
-                user: "user",
-                content: {
-                    text: "CARV contract address?",
-                    action: "FETCH_TOKEN_INFO",
-                },
-            },
-            {
-                user: "assistant",
-                content: {
-                    text: "I'll find the contract addresses for CARV across different platforms",
-                    action: "FETCH_TOKEN_INFO",
-                },
-            },
-        ],
-        [
-            {
-                user: "user",
-                content: {
-                    text: "show me $CARV info",
-                    action: "FETCH_TOKEN_INFO",
-                },
-            },
-            {
-                user: "assistant",
-                content: {
-                    text: "Here's what I found about the CARV token",
-                    action: "FETCH_TOKEN_INFO",
-                },
-            },
-        ],
-        [
-            {
-                user: "user",
-                content: {
-                    text: "what's $CARV used for?",
-                    action: "FETCH_TOKEN_INFO",
-                },
-            },
-            {
-                user: "assistant",
-                content: {
-                    text: "I'll check the use cases and categories for CARV",
                     action: "FETCH_TOKEN_INFO",
                 },
             },

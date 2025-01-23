@@ -7,51 +7,54 @@ import {
     elizaLogger,
 } from "@elizaos/core";
 import {
-    CarvIDProvider,
+    TwitterBalanceProvider,
     TwitterBalanceParams,
-    TwitterBalanceResponse,
-    carvIDProvider,
-} from "../../providers/carv/carv_id";
+    TwitterBalanceQueryResult,
+    createTwitterBalanceProvider,
+} from "../../providers/carv/twitterBalance";
 
 export class TwitterBalanceAction {
-    constructor(
-        private provider: CarvIDProvider,
-        private runtime: IAgentRuntime
-    ) {}
+    constructor(private provider: TwitterBalanceProvider) {}
 
+    /**
+     * Validate query parameters
+     */
     private validateParams(params: TwitterBalanceParams): string[] {
         const validationMessages: string[] = [];
 
-        // Twitter handle validation
         if (!params.twitter_user_id) {
             validationMessages.push("Twitter handle is required");
         }
 
-        // Chain name validation
         if (!params.chain_name) {
             validationMessages.push("Chain name is required");
+        } else {
+            params.chain_name = params.chain_name.toLowerCase();
         }
 
-        // Token ticker validation
         if (!params.token_ticker) {
             validationMessages.push("Token ticker is required");
+        } else {
+            params.token_ticker = params.token_ticker.toUpperCase();
         }
 
         return validationMessages;
     }
 
-    private formatResponse(
-        response: TwitterBalanceResponse,
-        params: TwitterBalanceParams
-    ): string {
-        if (response.code === 0 && response.data) {
+    /**
+     * Format response for display
+     */
+    private formatResponse(result: TwitterBalanceQueryResult): string {
+        if (result.success && result.data) {
+            const params = result.metadata.queryDetails.params;
             return `🔍 Balance Information:
 • Twitter User: @${params.twitter_user_id}
 • Chain: ${params.chain_name}
 • Token: ${params.token_ticker}
-• Balance: ${response.data.balance} ${params.token_ticker.toUpperCase()}`;
+• Balance: ${result.data.balance} ${params.token_ticker}`;
         } else {
-            switch (response.msg) {
+            const errorMsg = result.error?.message || "Unknown error occurred";
+            switch (errorMsg) {
                 case "received rsp err twitter handle not found":
                     return "❌ Error: Twitter handle not found. Please check if the Twitter handle is correct.";
                 case "no token found in this chain":
@@ -59,19 +62,26 @@ export class TwitterBalanceAction {
                 case "unsupported chain name":
                     return "❌ Error: Unsupported blockchain. Please check the chain name.";
                 default:
-                    return `❌ Error: ${response.msg || "Unknown error occurred"}`;
+                    return `❌ Error: ${errorMsg}`;
             }
         }
     }
 
+    /**
+     * Get Twitter user's token balance
+     */
     public async getTwitterBalance(
         message: Memory,
+        runtime: IAgentRuntime,
         state: State
-    ): Promise<{ success: boolean; response: string; data?: any }> {
+    ): Promise<{
+        success: boolean;
+        response: string;
+        data?: TwitterBalanceQueryResult;
+    }> {
         try {
-            // Use provider to process query
-            const result = await this.provider.processBalanceQuery(
-                this.runtime,
+            const result = await this.provider.processD_A_T_AQuery(
+                runtime,
                 message,
                 state
             );
@@ -85,19 +95,10 @@ export class TwitterBalanceAction {
             }
 
             const { queryResult } = result;
-
-            // Extract parameters from message for formatting
-            const content = message.content as Record<string, string>;
-            const params: TwitterBalanceParams = {
-                twitter_user_id: content.twitter_user_id || "",
-                chain_name: content.chain_name || "",
-                token_ticker: content.token_ticker || "",
-            };
-
             return {
-                success: queryResult.code === 0,
-                response: this.formatResponse(queryResult, params),
-                data: queryResult.data,
+                success: queryResult.success,
+                response: this.formatResponse(queryResult),
+                data: queryResult,
             };
         } catch (error) {
             elizaLogger.error("Error in getTwitterBalance:", error);
@@ -110,25 +111,50 @@ export class TwitterBalanceAction {
 }
 
 export const twitterBalanceAction: Action = {
-    name: "twitter_balance",
+    name: "TWITTER_BALANCE",
     description: "Check token balance of a Twitter user on specific blockchain",
-    similes: [
-        "check balance",
-        "get token balance",
-        "show token amount",
-        "view balance",
-        "check token holdings",
-        "show wallet balance",
-        "display token balance",
-        "get holdings",
-        "check account balance",
-        "view token amount",
-        "show crypto balance",
-        "check token value",
-        "get wallet holdings",
-        "display account balance",
-        "view holdings",
-    ],
+    handler: async (
+        runtime: IAgentRuntime,
+        message: Memory,
+        state: State,
+        _options: any,
+        callback?: HandlerCallback
+    ) => {
+        try {
+            const provider = createTwitterBalanceProvider(runtime);
+            const action = new TwitterBalanceAction(provider);
+            const result = await action.getTwitterBalance(
+                message,
+                runtime,
+                state
+            );
+
+            if (callback) {
+                callback({
+                    text: result.response,
+                    content: {
+                        success: result.success,
+                        data: result.data,
+                    },
+                });
+            }
+
+            return result.success;
+        } catch (error) {
+            elizaLogger.error("Error in twitter balance action:", error);
+            if (callback) {
+                callback({
+                    text: `Error checking balance: ${error.message}`,
+                    content: { error: error.message },
+                });
+            }
+            return false;
+        }
+    },
+    validate: async (runtime: IAgentRuntime) => {
+        const apiKey = runtime.getSetting("DATA_API_KEY");
+        return !!apiKey;
+    },
     examples: [
         [
             {
@@ -155,43 +181,21 @@ export const twitterBalanceAction: Action = {
             },
         ],
     ],
-    validate: async (runtime: IAgentRuntime) => {
-        return true; // No specific validation needed for this action
-    },
-    handler: async (
-        runtime: IAgentRuntime,
-        message: Memory,
-        state: State,
-        _options: any,
-        callback?: HandlerCallback
-    ) => {
-        try {
-            const provider = carvIDProvider(runtime);
-            const action = new TwitterBalanceAction(provider, runtime);
-            const result = await action.getTwitterBalance(message, state);
-
-            if (callback) {
-                callback({
-                    text: result.response,
-                    content: {
-                        success: result.success,
-                        data: result.data,
-                    },
-                });
-            }
-
-            return result.success;
-        } catch (error) {
-            elizaLogger.error("Error in twitter balance action:", error);
-            if (callback) {
-                callback({
-                    text: `Error checking balance: ${error.message}`,
-                    content: { error: error.message },
-                });
-            }
-            return false;
-        }
-    },
+    similes: [
+        "check balance",
+        "get token balance",
+        "show token amount",
+        "view balance",
+        "check token holdings",
+        "show wallet balance",
+        "display token balance",
+        "get holdings",
+        "check account balance",
+        "view token amount",
+        "show crypto balance",
+        "check token value",
+        "get wallet holdings",
+        "display account balance",
+        "view holdings",
+    ],
 };
-
-export default twitterBalanceAction;
