@@ -3,10 +3,8 @@ import {
     createWalletClient,
     formatUnits,
     http,
-    parseEther,
     parseUnits,
 } from "viem";
-import { deployContract } from "viem/actions";
 import { privateKeyToAccount } from "viem/accounts";
 import type { IAgentRuntime, Provider, Memory, State } from "@elizaos/core";
 import type {

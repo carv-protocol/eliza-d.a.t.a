@@ -5,15 +5,11 @@ import {
     Memory,
     State,
     elizaLogger,
-    composeContext,
-    generateObject,
-    ModelClass,
 } from "@elizaos/core";
 import {
     DatabaseProvider,
     databaseProvider,
 } from "../providers/ethereum/ethereumData";
-import { fetchTransactionTemplate } from "../templates";
 
 // Query parameter interface with stricter types
 interface FetchTransactionParams {
