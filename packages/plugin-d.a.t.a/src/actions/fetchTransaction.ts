@@ -12,7 +12,7 @@ import {
 import {
     DatabaseProvider,
     databaseProvider,
-} from "../providers/ethereum/database";
+} from "../providers/ethereum/ethereumData";
 import { fetchTransactionTemplate } from "../templates";
 
 // Query parameter interface with stricter types
