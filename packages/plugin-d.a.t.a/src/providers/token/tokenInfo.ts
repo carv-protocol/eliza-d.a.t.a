@@ -66,18 +66,18 @@ interface TokenQueryResult {
 export class TokenInfoProvider {
     private readonly API_URL: string;
     private readonly AUTH_TOKEN: string;
-    private readonly PROVIDER_ANALYSIS: boolean;
+    private readonly DATA_PROVIDER_ANALYSIS: boolean;
 
     constructor(runtime: IAgentRuntime) {
         // Get API configuration from runtime settings
         this.API_URL = runtime.getSetting("DATA_API_KEY");
         this.AUTH_TOKEN = runtime.getSetting("DATA_AUTH_TOKEN");
-        this.PROVIDER_ANALYSIS =
-            runtime.getSetting("PROVIDER_ANALYSIS") === "true";
+        this.DATA_PROVIDER_ANALYSIS =
+            runtime.getSetting("DATA_PROVIDER_ANALYSIS") === "true";
     }
 
     public getProviderAnalysis(): boolean {
-        return this.PROVIDER_ANALYSIS;
+        return this.DATA_PROVIDER_ANALYSIS;
     }
 
     private fetchTokenInfoTemplate(): string {

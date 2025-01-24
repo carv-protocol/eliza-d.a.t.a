@@ -58,16 +58,16 @@ export class DatabaseProvider {
     private chain: string;
     private readonly API_URL: string;
     private readonly AUTH_TOKEN: string;
-    private readonly PROVIDER_ANALYSIS: boolean;
+    private readonly DATA_PROVIDER_ANALYSIS: boolean;
     constructor(chain: string, runtime: IAgentRuntime) {
         this.chain = chain;
         this.API_URL = runtime.getSetting("DATA_API_KEY");
         this.AUTH_TOKEN = runtime.getSetting("DATA_AUTH_TOKEN");
-        this.PROVIDER_ANALYSIS =
+        this.DATA_PROVIDER_ANALYSIS =
             runtime.getSetting("DATA_PROVIDER_ANALYSIS") === "true";
     }
     getProviderAnalysis(): boolean {
-        return this.PROVIDER_ANALYSIS;
+        return this.DATA_PROVIDER_ANALYSIS;
     }
 
     public extractSQLQuery(preResponse: any): string | null {
