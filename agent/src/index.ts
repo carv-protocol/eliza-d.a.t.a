@@ -61,6 +61,7 @@ import { zksyncEraPlugin } from "@elizaos/plugin-zksync-era";
 import { cronosZkEVMPlugin } from "@elizaos/plugin-cronoszkevm";
 import { abstractPlugin } from "@elizaos/plugin-abstract";
 import { avalanchePlugin } from "@elizaos/plugin-avalanche";
+import { dataPlugin } from "@elizaos/plugin-d.a.t.a";
 import Database from "better-sqlite3";
 import fs from "fs";
 import path from "path";
@@ -68,7 +69,6 @@ import { fileURLToPath } from "url";
 import yargs from "yargs";
 import net from "net";
 
-import { onchainDataPlugin } from "@elizaos/plugin-d.a.t.a";
 
 const __filename = fileURLToPath(import.meta.url); // get the resolved path to the file
 const __dirname = path.dirname(__filename); // get the name of the directory
@@ -522,7 +522,7 @@ export async function createAgent(
         character,
         // character.plugins are handled when clients are added
         plugins: [
-            getSecret(character, "DATA_API_KEY") ? onchainDataPlugin : null,
+            getSecret(character, "DATA_API_KEY") ? dataPlugin : null,
             bootstrapPlugin,
             getSecret(character, "CONFLUX_CORE_PRIVATE_KEY")
                 ? confluxPlugin

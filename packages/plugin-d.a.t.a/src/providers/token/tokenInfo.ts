@@ -73,7 +73,7 @@ export class TokenInfoProvider {
         this.API_URL = runtime.getSetting("DATA_API_KEY");
         this.AUTH_TOKEN = runtime.getSetting("DATA_AUTH_TOKEN");
         this.PROVIDER_ANALYSIS =
-            runtime.getSetting("PROVIDER_ANALYSIS") === "true";
+            runtime.getSetting("DATA_PROVIDER_ANALYSIS") === "true";
     }
 
     public getProviderAnalysis(): boolean {
