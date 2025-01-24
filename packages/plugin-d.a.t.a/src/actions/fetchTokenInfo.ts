@@ -164,16 +164,6 @@ This token is available on ${info.contract_infos.length} platform${
 
             tokenResult = ret.queryResult as unknown as TokenInfoQueryResult;
 
-            // // Try to get analysis if provider analysis is enabled
-            // if (this.provider.getProviderAnalysis()) {
-            //     analysisResult = await this.provider.analyzeQuery(
-            //         tokenResult,
-            //         message,
-            //         runtime,
-            //         state
-            //     );
-            // }
-
             // If analysis fails or is disabled, return token result
             if (!analysisResult) {
                 return {
