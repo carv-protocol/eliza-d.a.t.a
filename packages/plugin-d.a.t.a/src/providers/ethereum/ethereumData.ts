@@ -8,7 +8,10 @@ import {
     ModelClass,
     stringToUuid,
     getEmbeddingZeroVector,
+    generateObject,
+    composeContext,
 } from "@elizaos/core";
+import { z } from "zod";
 
 // API response interface for query results
 export interface IQueryResult {
@@ -49,6 +52,71 @@ interface IApiResponse {
 export interface IAnalysisResult {
     context: string;
     queryResult: IQueryResult;
+}
+
+// Analysis result interface
+interface IBlockRange {
+    start: number;
+    end: number;
+    uniqueBlocks: number;
+}
+
+interface IValueDistribution {
+    range: string;
+    percentage: number;
+}
+
+interface IGasPriceRange {
+    min: number;
+    max: number;
+    average: number;
+}
+
+interface IActiveParticipant {
+    address: string;
+    activity: string;
+}
+
+interface ITransactionType {
+    type: string;
+    percentage: number;
+}
+
+interface IAnalysis {
+    transactionOverview: {
+        totalTransactions: number;
+        timePeriod: string;
+        blockRange: IBlockRange;
+        successRate: number;
+        trends: string[];
+    };
+    valueAnalysis: {
+        totalValue: number;
+        averageValue: number;
+        valueDistribution: IValueDistribution[];
+        significantTransfers: string[];
+    };
+    gasAndNetwork: {
+        averageGas: number;
+        totalGas: number;
+        gasPriceRange: IGasPriceRange;
+        congestionMetrics: string[];
+    };
+    addressActivity: {
+        uniqueAddresses: number;
+        activeParticipants: IActiveParticipant[];
+        contractInteractions: string[];
+    };
+    technicalInsights: {
+        transactionTypes: ITransactionType[];
+        smartContractActivity: string[];
+        specialCharacteristics: string[];
+    };
+    riskAndSecurity: {
+        anomalies: string[];
+        securityConcerns: string[];
+        regulatoryNotes: string[];
+    };
 }
 
 export class DatabaseProvider {
@@ -602,6 +670,20 @@ Query Metadata:
 `;
     }
 
+    // Schema for analysis result using zod
+    private analysisSchema = z.object({
+        summary: z.string().describe("Overall summary of the query results"),
+        analysis: z
+            .array(
+                z.object({
+                    aspect: z.string().describe("Analysis dimension or aspect"),
+                    content: z.string().describe("Detailed analysis content"),
+                })
+            )
+            .describe("Multiple analysis dimensions"),
+        insights: z.array(z.string()).describe("Key findings and insights"),
+    });
+
     public async analyzeQuery(
         queryResult: IQueryResult,
         message: Memory,
@@ -620,27 +702,69 @@ Query Metadata:
                 state = await runtime.updateRecentMessageState(state);
             }
 
-            const template = this.getAnalysisTemplate();
-            const context = template
-                .replace(
-                    "{{transactionData}}",
-                    JSON.stringify(queryResult.data, null, 2)
-                )
-                .replace(
-                    "{{queryMetadata}}",
-                    JSON.stringify(queryResult.metadata, null, 2)
-                );
+            elizaLogger.log("%%%% D.A.T.A analysis start");
 
-            const analysisResponse = await generateMessageResponse({
+            elizaLogger.log(
+                `%%%% D.A.T.A queryResult: ${JSON.stringify(queryResult, null, 2)}`
+            );
+
+            const template = `
+            # User Query
+            ${message.content.text}
+
+            # Query Result
+            ${JSON.stringify(queryResult, null, 2)}
+
+            # Analysis Instructions
+            Please analyze the above Ethereum blockchain data with focus on:
+            1. Overall situation summary
+            2. Detailed analysis of various aspects (transactions, value transfers, gas usage, address activities, etc.)
+            3. Key findings and insights
+
+            Requirements:
+            - Use clear and accessible language
+            - Highlight significant and anomalous patterns
+            - Freely organize analysis dimensions
+            - Consider data correlations
+            - Include relevant metrics where appropriate
+            `;
+
+            const context = composeContext({
+                state,
+                template,
+            });
+
+            elizaLogger.log("%%%% generateObject...");
+
+            const analysisResponse = await generateObject({
                 runtime,
                 context: context,
                 modelClass: ModelClass.LARGE,
+                schema: this.analysisSchema,
             });
 
-            // Extract text content from response
-            return typeof analysisResponse === "string"
-                ? analysisResponse
-                : analysisResponse.text || null;
+            // elizaLogger.log("%%%% D.A.T.A. analysisResponse", analysisResponse);
+
+            // Format analysis results
+            if (analysisResponse?.object) {
+                const obj = analysisResponse.object as Record<string, any>;
+                const analysisText = [
+                    "Summary:",
+                    obj.summary,
+                    "",
+                    ...(obj.analysis || [])
+                        .map((item) => [`${item.aspect}:`, item.content, ""])
+                        .flat(),
+                    obj.insights?.length ? "Key Findings:" : "",
+                    ...(obj.insights || []).map((insight) => `• ${insight}`),
+                ]
+                    .filter((line) => line !== "")
+                    .join("\n");
+
+                return analysisText;
+            }
+
+            return null;
         } catch (error) {
             elizaLogger.error("Error in analyzeQuery:", error);
             return null;
@@ -703,7 +827,7 @@ Query Metadata:
             // Check for SQL query in the response using class method
             const sqlQuery = this.extractSQLQuery(preResponse);
             if (sqlQuery) {
-                elizaLogger.log("%%%% D.A.T.A. Generated SQL query:", sqlQuery);
+                elizaLogger.log("%%%% D.A.T.A Generated SQL query:", sqlQuery);
                 const analysisInstruction = this.getAnalysisInstruction();
                 try {
                     // Call query method on provider

@@ -1,180 +1,225 @@
-# Plugin Web Search
+# @elizaos/plugin-web-search
+
+A plugin for powerful web search capabilities, providing efficient search query handling and result processing through a customizable API interface.
 
 ## Overview
 
-The Web Search Plugin enables powerful and customizable web search capabilities, offering flexibility and ease of integration for modern applications.
+This plugin provides functionality to:
 
-## Features
+- Execute web search queries with customizable parameters
+- Process and format search results
+- Handle search API authentication
+- Manage token limits and response sizes
+- Optimize query performance
 
-- Efficient search query handling.
-- Configurable options for advanced customization.
-- Optimized for performance and scalability.
+## Installation
 
-## Handlers
-
-### `search`
-
-The `search` handler executes web search queries with specified parameters, returning results in a structured format.
-
-#### Usage
-
-```typescript
-import { WebSearch } from 'web-search-plugin';
-
-const search = new WebSearch({
-  apiEndpoint: 'https://api.example.com/search',
-  timeout: 5000,
-});
-
-try {
-  const results = await search.query('example query', {
-    limit: 10,
-    sortBy: 'relevance',
-  });
-  console.log('Search Results:', results);
-} catch (error) {
-  console.error('Search failed:', error);
-}
+```bash
+pnpm install @elizaos/plugin-web-search
 ```
-
-#### Features
-
-- **Query Customization**: Specify query parameters such as `limit` and `sortBy`.
-- **Error Handling**: Handles common search errors gracefully.
 
 ## Configuration
 
-### Environment Variables
-
-Set the following environment variables for optimal performance:
-
-| Variable Name    | Description                       |
-| ---------------- | --------------------------------- |
-| `API_ENDPOINT`   | URL for the search API endpoint.  |
-| `SEARCH_TIMEOUT` | Timeout duration in milliseconds. |
-
-Example `.env` file:
+The plugin requires the following environment variables:
 
 ```env
-API_ENDPOINT=https://api.example.com/search
-SEARCH_TIMEOUT=5000
+TAVILY_API_KEY=your_api_key    # Required: API key for search service
 ```
 
-### TypeScript Configuration
+## Usage
 
-Ensure your `tsconfig.json` is properly configured:
-
-```json
-{
-  "compilerOptions": {
-    "target": "ESNext",
-    "module": "CommonJS",
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true
-  }
-}
-```
-
-## Example Workflow
-
-Streamline your search operations with the following example:
+Import and register the plugin in your Eliza configuration:
 
 ```typescript
-import { WebSearch } from 'web-search-plugin';
+import { webSearchPlugin } from "@elizaos/plugin-web-search";
 
-const search = new WebSearch({ apiEndpoint: 'https://api.example.com/search' });
-
-(async () => {
-  try {
-    // Execute a search query
-    const results = await search.query('example', { limit: 5 });
-    console.log('Search Results:', results);
-  } catch (error) {
-    console.error('Error executing search:', error);
-  }
-})();
+export default {
+    plugins: [webSearchPlugin],
+    // ... other configuration
+};
 ```
 
-## Local Testing
+## Features
 
-To test locally, you can set up a mock server for the API endpoint:
+### Web Search
 
-1. Install `json-server`:
+The plugin provides comprehensive web search capabilities:
 
-   ```bash
-   npm install -g json-server
-   ```
+```typescript
+import { webSearch } from "@elizaos/plugin-web-search";
 
-2. Create a `db.json` file with mock search data.
+// Execute a search query
+const result = await webSearch.handler(
+    runtime,
+    {
+        content: { text: "What is the latest news about AI?" },
+    },
+    state,
+    {},
+    callback
+);
+```
 
-3. Start the mock server:
+### Token Management
 
-   ```bash
-   json-server --watch db.json --port 3000
-   ```
+```typescript
+// The plugin automatically handles token limits
+const DEFAULT_MAX_WEB_SEARCH_TOKENS = 4000;
 
-4. Update your `.env` file:
-   ```env
-   API_ENDPOINT=http://localhost:3000
-   ```
+// Example of token-limited response
+const response = MaxTokens(searchResult, DEFAULT_MAX_WEB_SEARCH_TOKENS);
+```
 
-## Common Issues
+## Development
 
-### "API endpoint not defined"
+### Building
 
-- Ensure the `API_ENDPOINT` is set in your environment variables.
-
-### "Search query timeout"
-
-- Increase the `SEARCH_TIMEOUT` value in the configuration.
-
-## Dependencies
-
-This plugin relies on the following:
-
-- `axios` for HTTP requests.
-- `dotenv` for managing environment variables.
-
-## Development Guide
-
-### Setup
-
-1. Clone the repository:
-
-   ```bash
-   git clone https://github.com/your-repo/web-search-plugin.git
-   ```
-
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
+```bash
+pnpm run build
+```
 
 ### Testing
 
-Run tests with:
-
 ```bash
-npm test
+pnpm run test
 ```
 
-### Contribution Guidelines
+### Development Mode
 
-- Fork the repository.
-- Create a feature branch.
-- Submit a pull request with a clear description.
+```bash
+pnpm run dev
+```
 
-### Security Best Practices
+## Dependencies
 
-- Validate user inputs to prevent injection attacks.
-- Use HTTPS for secure API communication.
+- `@elizaos/core`: Core Eliza functionality
+- `js-tiktoken`: Token counting and management
+- `tsup`: Build tool
+- Other standard dependencies listed in package.json
 
-## Performance Optimization
+## API Reference
 
-- Use caching for frequently queried terms.
-- Optimize query parameters for faster responses.
+### Core Interfaces
 
----
+```typescript
+interface Action {
+    name: "WEB_SEARCH";
+    similes: string[];
+    description: string;
+    validate: (runtime: IAgentRuntime, message: Memory) => Promise<boolean>;
+    handler: (
+        runtime: IAgentRuntime,
+        message: Memory,
+        state: State,
+        options: any,
+        callback: HandlerCallback
+    ) => Promise<void>;
+    examples: Array<Array<any>>;
+}
 
-This documentation aims to streamline onboarding, reduce support queries, and enable faster adoption of the Web Search Plugin.
+interface SearchResult {
+    title: string;
+    url: string;
+    answer?: string;
+    results?: Array<{
+        title: string;
+        url: string;
+    }>;
+}
+```
+
+### Plugin Methods
+
+- `webSearch.handler`: Main method for executing searches
+- `generateWebSearch`: Core search generation function
+- `MaxTokens`: Token limit management function
+- `getTotalTokensFromString`: Token counting utility
+
+## Common Issues/Troubleshooting
+
+### Issue: API Authentication Failures
+
+- **Cause**: Invalid or missing Tavily API key
+- **Solution**: Verify TAVILY_API_KEY environment variable
+
+### Issue: Token Limit Exceeded
+
+- **Cause**: Search results exceeding maximum token limit
+- **Solution**: Results are automatically truncated to fit within limits
+
+### Issue: Search Rate Limiting
+
+- **Cause**: Too many requests in short time
+- **Solution**: Implement proper request throttling
+
+## Security Best Practices
+
+- Store API keys securely using environment variables
+- Validate all search inputs
+- Implement proper error handling
+- Keep dependencies updated
+- Monitor API usage and rate limits
+- Use HTTPS for API communication
+
+## Example Usage
+
+```typescript
+// Basic search
+const searchQuery = "Latest developments in quantum computing";
+const results = await generateWebSearch(searchQuery, runtime);
+
+// With formatted response
+if (results && results.results.length) {
+    const formattedResponse = `${results.answer}\n\nFor more details, check out:\n${results.results
+        .map(
+            (result, index) => `${index + 1}. [${result.title}](${result.url})`
+        )
+        .join("\n")}`;
+}
+```
+
+## Configuration Options
+
+### Token Management
+
+```typescript
+const DEFAULT_MODEL_ENCODING = "gpt-3.5-turbo";
+const DEFAULT_MAX_WEB_SEARCH_TOKENS = 4000;
+```
+
+### Search Actions
+
+The plugin includes multiple search action similes:
+
+- SEARCH_WEB
+- INTERNET_SEARCH
+- LOOKUP
+- QUERY_WEB
+- FIND_ONLINE
+- And more...
+
+## Contributing
+
+Contributions are welcome! Please see the [CONTRIBUTING.md](CONTRIBUTING.md) file for more information.
+
+## Credits
+
+This plugin integrates with and builds upon several key technologies:
+
+- [Tavily API](https://tavily.com/): Advanced search and content analysis API
+- [js-tiktoken](https://github.com/dqbd/tiktoken): Token counting for API responses
+- [Zod](https://github.com/colinhacks/zod): TypeScript-first schema validation
+
+Special thanks to:
+
+- The Eliza community for their contributions and feedback
+
+For more information about the search capabilities and tools:
+
+- [Tavily API Documentation](https://docs.tavily.com/)
+- [Token Management Guide](https://github.com/dqbd/tiktoken#readme)
+- [Search API Best Practices](https://docs.tavily.com/docs/guides/best-practices)
+
+## License
+
+This plugin is part of the Eliza project. See the main project repository for license information.

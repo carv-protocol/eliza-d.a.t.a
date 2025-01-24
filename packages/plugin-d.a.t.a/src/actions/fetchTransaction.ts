@@ -200,13 +200,13 @@ export class FetchTransactionAction {
 
             transactionResult = ret.queryResult as TransactionQueryResult;
 
-            // // Try to get analysis
-            // analysisResult = await this.dbProvider.analyzeQuery(
-            //     transactionResult,
-            //     message,
-            //     runtime,
-            //     state
-            // );
+            // Try to get analysis
+            analysisResult = await this.dbProvider.analyzeQuery(
+                transactionResult,
+                message,
+                runtime,
+                state
+            );
 
             // If analysis fails, return transaction result
             if (!analysisResult) {
@@ -293,7 +293,7 @@ export const fetchTransactionAction: Action = {
             {
                 user: "user",
                 content: {
-                    text: "Find transactions above 1 ETH from last month",
+                    text: "Analyze gas fees trend in the last 24 hours and compare with last week's average",
                     action: "FETCH_TRANSACTIONS",
                 },
             },
@@ -302,7 +302,7 @@ export const fetchTransactionAction: Action = {
             {
                 user: "user",
                 content: {
-                    text: "Show me transactions from the last 24 hours",
+                    text: "Find whale addresses with transactions over 100 ETH in the past 24 hours",
                     action: "FETCH_TRANSACTIONS",
                 },
             },
@@ -311,7 +311,7 @@ export const fetchTransactionAction: Action = {
             {
                 user: "user",
                 content: {
-                    text: "Find all contract interactions for address 0x1234...",
+                    text: "Show me USDT transactions with value over 100,000 USD in the last hour",
                     action: "FETCH_TRANSACTIONS",
                 },
             },
@@ -320,7 +320,88 @@ export const fetchTransactionAction: Action = {
             {
                 user: "user",
                 content: {
-                    text: "Show large transactions (>10 ETH) from the last week",
+                    text: "Analyze cross-chain bridge transactions in the last 24 hours",
+                    action: "FETCH_TRANSACTIONS",
+                },
+            },
+        ],
+        [
+            {
+                user: "user",
+                content: {
+                    text: "Compare gas fees between peak hours and off-peak hours today",
+                    action: "FETCH_TRANSACTIONS",
+                },
+            },
+        ],
+        [
+            {
+                user: "user",
+                content: {
+                    text: "Show me the most active DEX contracts by transaction volume today",
+                    action: "FETCH_TRANSACTIONS",
+                },
+            },
+        ],
+        [
+            {
+                user: "user",
+                content: {
+                    text: "Find all transactions involving Uniswap V3 pools in the last hour",
+                    action: "FETCH_TRANSACTIONS",
+                },
+            },
+        ],
+        [
+            {
+                user: "user",
+                content: {
+                    text: "Analyze stablecoin transfer patterns between major exchanges",
+                    action: "FETCH_TRANSACTIONS",
+                },
+            },
+        ],
+        [
+            {
+                user: "user",
+                content: {
+                    text: "Show me the top 10 NFT marketplace transactions by value today",
+                    action: "FETCH_TRANSACTIONS",
+                },
+            },
+        ],
+        [
+            {
+                user: "user",
+                content: {
+                    text: "Find large token transfers (>$1M) between unknown addresses",
+                    action: "FETCH_TRANSACTIONS",
+                },
+            },
+        ],
+        [
+            {
+                user: "user",
+                content: {
+                    text: "Analyze MEV bot activities in the latest 1000 blocks",
+                    action: "FETCH_TRANSACTIONS",
+                },
+            },
+        ],
+        [
+            {
+                user: "user",
+                content: {
+                    text: "Show me failed transactions with high gas fees in the last hour",
+                    action: "FETCH_TRANSACTIONS",
+                },
+            },
+        ],
+        [
+            {
+                user: "user",
+                content: {
+                    text: "Find arbitrage transactions between major DEX platforms",
                     action: "FETCH_TRANSACTIONS",
                 },
             },

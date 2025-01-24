@@ -73,7 +73,7 @@ export class TokenInfoProvider {
         this.API_URL = runtime.getSetting("DATA_API_KEY");
         this.AUTH_TOKEN = runtime.getSetting("DATA_AUTH_TOKEN");
         this.PROVIDER_ANALYSIS =
-            runtime.getSetting("DATA_PROVIDER_ANALYSIS") === "true";
+            runtime.getSetting("PROVIDER_ANALYSIS") === "true";
     }
 
     public getProviderAnalysis(): boolean {
@@ -412,7 +412,10 @@ Query Metadata:
             }
 
             const startTime = Date.now();
-            elizaLogger.log("Querying token info for ticker:", params.ticker);
+            elizaLogger.log(
+                "%%%% D.A.T.A. Querying token info for ticker:",
+                params.ticker
+            );
 
             try {
                 const tokenInfo = await this.queryTokenInfo(params.ticker);
@@ -433,6 +436,11 @@ Query Metadata:
                         },
                     },
                 };
+
+                elizaLogger.log(
+                    "%%%% D.A.T.A. queryResult:",
+                    JSON.stringify(queryResult, null, 2)
+                );
 
                 const analysisInstruction = this.getAnalysisInstruction();
                 const context = `

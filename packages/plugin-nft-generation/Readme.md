@@ -1,70 +1,111 @@
-### NFT Collection Generation Plugin
+# @elizaos/plugin-nft-generation
 
-A plugin for handling NFT collection generation, NFT creation, and verification on the Solana blockchain.
+NFT collection generation plugin for Eliza OS that enables NFT creation, collection management, and verification on the Solana blockchain.
 
-## Handlers
+## Overview
 
-### createCollection
-The createCollection handler generates an NFT collection logo, uploads it to AWS S3, and creates a Solana blockchain collection.
+This plugin provides comprehensive NFT functionality, including collection creation, NFT minting, and verification, with automatic image generation and metadata management.
 
-#### Usage
-```typescript
-import { createCollection } from "./handlers/createCollection.ts";
+## Features
 
-const result = await createCollection({
-    runtime: runtimeInstance, // An instance of IAgentRuntime
-    collectionName: "MyCollection", // The name of the collection
-    fee: 0.01, // (Optional) Fee for transactions
-});
+- Automated NFT collection creation
+- AI-powered image generation for NFTs
+- Collection logo generation
+- Metadata creation and management
+- AWS S3 integration for asset storage
+- Solana blockchain integration
+- NFT verification system
+- Automatic nonce management
+- Comprehensive error handling
 
-console.log("Collection created:", result);
+## Installation
+
+```bash
+pnpm install @elizaos/plugin-nft-generation
 ```
 
-#### Features
+## Configuration
 
-Image Generation: Automatically generates a collection logo based on the provided name and theme.
-AWS S3 Integration: Uploads the generated logo and metadata to AWS S3.
-Solana Blockchain: Creates a collection with the generated logo and metadata on the Solana blockchain.
-### createNFT
-The createNFT handler generates individual NFTs for a collection. It includes metadata creation and uploads the NFT information to AWS S3.
+The plugin requires environment variables or runtime settings:
 
-#### Usage
+```env
+# Solana Configuration
+SOLANA_PUBLIC_KEY=your-wallet-public-key
+SOLANA_PRIVATE_KEY=your-wallet-private-key
+SOLANA_ADMIN_PUBLIC_KEY=admin-public-key
+SOLANA_ADMIN_PRIVATE_KEY=admin-private-key
+SOLANA_VERIFY_TOKEN=verification-token
+SOLANA_CLUSTER=devnet  # or mainnet-beta
+
+# AWS Configuration
+AWS_ACCESS_KEY_ID=your-aws-access-key
+AWS_SECRET_ACCESS_KEY=your-aws-secret-key
+AWS_REGION=aws-region
+AWS_S3_BUCKET=bucket-name
+```
+
+## API Reference
+
+### Collection Management
+
+#### `createCollection`
+
+Creates a new NFT collection with an AI-generated logo.
 
 ```typescript
-import { createNFT } from "./handlers/createNFT.ts";
-
-const nftResult = await createNFT({
+const result = await createCollection({
     runtime: runtimeInstance,
     collectionName: "MyCollection",
-    collectionAddress: "collectionAddress123",
-    collectionAdminPublicKey: "adminPublicKey123",
+    fee: 0.01, // Optional: royalty fee percentage
+});
+```
+
+#### `createNFT`
+
+Mints a new NFT in an existing collection.
+
+```typescript
+const nft = await createNFT({
+    runtime: runtimeInstance,
+    collectionName: "MyCollection",
+    collectionAddress: "collection123",
+    collectionAdminPublicKey: "admin123",
     collectionFee: 0.01,
     tokenId: 1,
 });
-
-console.log("NFT created:", nftResult);
 ```
 
-### verifyNFT
+#### `verifyNFT`
 
-The verifyNFT handler verifies an NFT against its collection using the Solana blockchain.
-
-#### Usage
+Verifies an NFT as part of a collection.
 
 ```typescript
-import { verifyNFT } from "./handlers/verifyNFT.ts";
-
-const verificationResult = await verifyNFT({
+const verification = await verifyNFT({
     runtime: runtimeInstance,
-    collectionAddress: "collectionAddress123",
-    NFTAddress: "NFTAddress123",
+    collectionAddress: "collection123",
+    NFTAddress: "nft123",
 });
+```
 
-console.log("NFT verified:", verificationResult);
-````
----
+## REST API Endpoints
 
-### Example Workflow
+### POST `/api/nft-generation/create-collection`
+
+Creates a new collection with generated logo.
+
+### POST `/api/nft-generation/create-nft`
+
+Mints a new NFT with generated artwork.
+
+### POST `/api/nft-generation/create-nft-metadata`
+
+Generates metadata for an NFT.
+
+### POST `/api/nft-generation/verify-nft`
+
+Verifies an NFT's collection membership.
+
+## Example Workflow
 
 The plugin provides a streamlined process for generating and verifying NFT collections:
 
@@ -87,7 +128,8 @@ const runtime = initializeRuntime(); // Replace with actual IAgentRuntime initia
         runtime,
         collectionName: "MyUniqueCollection",
         collectionAddress: collectionResult.address,
-        collectionAdminPublicKey: collectionResult.collectionInfo.adminPublicKey,
+        collectionAdminPublicKey:
+            collectionResult.collectionInfo.adminPublicKey,
         collectionFee: 0.01,
         tokenId: 1,
     });
@@ -100,86 +142,104 @@ const runtime = initializeRuntime(); // Replace with actual IAgentRuntime initia
         collectionAddress: collectionResult.address,
         NFTAddress: nftResult.address,
     });
-
     console.log("NFT verified:", verificationResult);
 })();
 ```
 
-### Configuration
-
-#### Environment Variables
-```
-Ensure the following environment variables are set for proper functionality:
-
-Variable Name	Description
-AWS_ACCESS_KEY_ID	AWS access key for S3 uploads
-AWS_SECRET_ACCESS_KEY	AWS secret key for S3 uploads
-AWS_REGION	AWS region where S3 is located
-AWS_S3_BUCKET	Name of the AWS S3 bucket
-SOLANA_PUBLIC_KEY	Public key for Solana blockchain
-SOLANA_PRIVATE_KEY	Private key for Solana blockchain
-SOLANA_ADMIN_PUBLIC_KEY	Admin public key for Solana operations
-SOLANA_ADMIN_PRIVATE_KEY	Admin private key for Solana operations
-```
-#### Example Prompts
+## Example Prompts
 
 Here are some examples of user prompts to trigger NFT collection generation:
 
-"Generate a collection named MyCollection."
-"Create a new NFT collection."
-"Compile an NFT collection for me."
-"Build a sci-fi themed collection."
+- "Generate a collection named MyCollection."
+- "Create a new NFT collection."
+- "Compile an NFT collection for me."
+- "Build a sci-fi themed collection."
 
+## Local Testing with TEE Simulator
 
-#### Local Testing with TEE Simulator
+To test locally using a Trusted Execution Environment (TEE) simulator:
 
-To test locally using a Trusted Execution Environment (TEE) simulator, follow these steps:
+1. Pull the simulator Docker image:
 
-Pull the simulator Docker image:
-``` bash
+```bash
 docker pull phalanetwork/tappd-simulator:latest
 ```
-Run the simulator:
 
-``` bash
+2. Run the simulator:
+
+```bash
 docker run --rm -p 8090:8090 phalanetwork/tappd-simulator:latest
 ```
-Update your environment variable for the simulator:
+
+3. Update your environment variable for the simulator:
 
 ```env
 DSTACK_SIMULATOR_ENDPOINT="http://localhost:8090"
 ```
 
-#### Dependencies
+## Security Best Practices
 
-This plugin relies on the following services and libraries:
+1. **Key Management**
 
-[@elizaos/plugin-node]
-[@elizaos/eliza]
-[@elizaos/plugin-image-generation]
-[@solana/web3.js]
+    - Store private keys securely
+    - Use environment variables
+    - Implement key rotation
+    - Monitor wallet activity
 
-### Action Configuration
+2. **Asset Security**
 
-#### GENERATE_COLLECTION
-The action for generating NFT collections is configured with the following parameters:
+    - Secure S3 bucket configuration
+    - Implement proper CORS policies
+    - Use secure URLs for metadata
+    - Regular backup of assets
 
-```typescript
-const nftCollectionGeneration: Action = {
-    name: "GENERATE_COLLECTION",
-    description: "Generate an NFT collection for the message",
-    handler: async (runtime, message, state, options, callback) => {
-        // Implementation
-    },
-    examples: [
-        {
-            user: "{{user1}}",
-            content: { text: "Generate a collection named Galaxy." },
-        },
-        {
-            agent: "{{agentName}}",
-            content: { text: "The collection Galaxy has been successfully created." },
-        },
-    ],
-};
-```
+3. **Transaction Safety**
+
+    - Validate all inputs
+    - Implement fee limits
+    - Double-check collection ownership
+    - Monitor transaction status
+
+4. **Error Handling**
+    - Log all operations
+    - Handle timeouts gracefully
+    - Validate metadata
+    - Provide clear error messages
+
+## Dependencies
+
+- @elizaos/core: workspace:\*
+- @elizaos/plugin-image-generation: workspace:\*
+- @elizaos/plugin-node: workspace:\*
+- @metaplex-foundation/mpl-token-metadata: ^3.3.0
+- @solana/web3.js: 1.95.5
+- express: 4.21.1
+- node-cache: 5.1.2
+
+## Contributing
+
+Contributions are welcome! Please see the [CONTRIBUTING.md](CONTRIBUTING.md) file for more information.
+
+## Credits
+
+This plugin integrates with:
+
+- [Solana Blockchain](https://solana.com)
+- [Metaplex Protocol](https://www.metaplex.com)
+- AWS S3 for asset storage
+
+Special thanks to:
+
+- The Solana ecosystem and all the open-source contributors who make these integrations possible.
+- The Eliza community for their contributions and feedback.
+
+For more information about Solana blockchain capabilities:
+
+- [Solana Documentation](https://docs.solana.com/)
+- [Solana Developer Portal](https://solana.com/developers)
+- [Solana Network Dashboard](https://solscan.io/)
+- [Solana GitHub Repository](https://github.com/solana-labs/solana)
+
+## License
+
+This plugin is part of the Eliza project. See the main project repository for license information.

@@ -1,4 +1,4 @@
-[@elizaos/core v0.1.7-alpha.1](../index.md) / Character
+[@elizaos/core v0.1.7](../index.md) / Character
 
 # Type Alias: Character
 
@@ -43,6 +43,12 @@ Model provider to use
 > `optional` **imageModelProvider**: [`ModelProviderName`](../enumerations/ModelProviderName.md)
 
 Image model provider to use, if different from modelProvider
+
+### imageVisionModelProvider?
+
+> `optional` **imageVisionModelProvider**: [`ModelProviderName`](../enumerations/ModelProviderName.md)
+
+Image Vision model provider to use, if different from modelProvider
 
 ### modelEndpointOverride?
 
@@ -218,7 +224,7 @@ Optional configuration
 
 #### Index Signature
 
- \[`key`: `string`\]: `string`
+\[`key`: `string`\]: `string`
 
 ### settings.intiface?
 
@@ -322,6 +328,10 @@ New structured ElevenLabs config
 
 > `optional` **model**: `string`
 
+### settings.modelConfig?
+
+> `optional` **modelConfig**: [`ModelConfiguration`](../interfaces/ModelConfiguration.md)
+
 ### settings.embeddingModel?
 
 > `optional` **embeddingModel**: `string`
@@ -332,7 +342,7 @@ New structured ElevenLabs config
 
 #### Index Signature
 
- \[`key`: `string`\]: `any`[]
+\[`key`: `string`\]: `any`[]
 
 ### settings.chains.evm?
 
@@ -341,6 +351,10 @@ New structured ElevenLabs config
 ### settings.chains.solana?
 
 > `optional` **solana**: `any`[]
+
+### settings.transcription?
+
+> `optional` **transcription**: [`TranscriptionProvider`](../enumerations/TranscriptionProvider.md)
 
 ### clientConfig?
 
@@ -440,6 +454,26 @@ Optional client-specific config
 
 > `optional` **shouldIgnoreDirectMessages**: `boolean`
 
+### clientConfig.gitbook?
+
+> `optional` **gitbook**: `object`
+
+### clientConfig.gitbook.keywords?
+
+> `optional` **keywords**: `object`
+
+### clientConfig.gitbook.keywords.projectTerms?
+
+> `optional` **projectTerms**: `string`[]
+
+### clientConfig.gitbook.keywords.generalQueries?
+
+> `optional` **generalQueries**: `string`[]
+
+### clientConfig.gitbook.documentTriggers?
+
+> `optional` **documentTriggers**: `string`[]
+
 ### style
 
 > **style**: `object`
@@ -496,4 +530,4 @@ Optional NFT prompt
 
 ## Defined in
 
-[packages/core/src/types.ts:629](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L629)
+[packages/core/src/types.ts:671](https://github.com/elizaOS/eliza/blob/main/packages/core/src/types.ts#L671)

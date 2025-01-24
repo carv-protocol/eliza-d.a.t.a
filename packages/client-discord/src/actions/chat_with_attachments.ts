@@ -1,7 +1,5 @@
-import { composeContext } from "@elizaos/core";
+import { composeContext, getModelSettings } from "@elizaos/core";
 import { generateText, trimTokens } from "@elizaos/core";
-import type { TiktokenModel } from "js-tiktoken";
-import { models } from "@elizaos/core";
 import { parseJSONObjectFromText } from "@elizaos/core";
 import {
     Action,
@@ -186,22 +184,24 @@ const summarizeAction = {
 
         let currentSummary = "";
 
-        const model = models[runtime.character.modelProvider];
-        const chunkSize = model.settings.maxOutputTokens;
+        const modelSettings = getModelSettings(
+            runtime.character.modelProvider,
+            ModelClass.SMALL
+        );
+        const chunkSize = modelSettings.maxOutputTokens;
 
         state.attachmentsWithText = attachmentsWithText;
         state.objective = objective;
-
+        const template = await trimTokens(
+            summarizationTemplate,
+            chunkSize + 500,
+            runtime
+        );
         const context = composeContext({
             state,
             // make sure it fits, we can pad the tokens a bit
             // Get the model's tokenizer based on the current model being used
-            template: trimTokens(
-                summarizationTemplate,
-                chunkSize + 500,
-                (model.model[ModelClass.SMALL] ||
-                    "gpt-4o-mini") as TiktokenModel // Use the same model as generation; Fallback if no SMALL model configured
-            ),
+            template,
         });
 
         const summary = await generateText({

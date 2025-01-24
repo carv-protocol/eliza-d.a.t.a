@@ -174,7 +174,11 @@ export class TwitterBalanceProvider {
             );
 
             try {
+                elizaLogger.log(`%%%% D.A.T.A. queryBalance: ${params}`);
                 const balanceInfo = await this.queryBalance(params);
+                elizaLogger.log(
+                    `%%%% D.A.T.A. balanceInfo: ${JSON.stringify(balanceInfo, null, 2)}`
+                );
 
                 elizaLogger.log("Balance info:", balanceInfo);
 
